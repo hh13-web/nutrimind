@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   Check,
@@ -24,8 +24,11 @@ const POINTS = [
 ]
 
 export default function Login() {
-  const { user, initializing, login, register } = useAuth()
+  const { user, initializing, login, register, enterGuest } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: string } | null)?.from
+  const target = from && from.startsWith('/app') ? from : '/app'
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -35,8 +38,8 @@ export default function Login() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!initializing && user) navigate('/app', { replace: true })
-  }, [initializing, user, navigate])
+    if (!initializing && user) navigate(target, { replace: true })
+  }, [initializing, user, navigate, target])
 
   function switchMode(next: Mode) {
     setMode(next)
@@ -68,7 +71,7 @@ export default function Login() {
       } else {
         await register(name.trim(), email.trim(), password)
       }
-      navigate('/app', { replace: true })
+      navigate(target, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败，请稍后重试')
     } finally {
@@ -85,12 +88,17 @@ export default function Login() {
     setSubmitting(true)
     try {
       await login('demo@nutrimind.app', 'demo1234')
-      navigate('/app', { replace: true })
+      navigate(target, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败，请稍后重试')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function enterAsGuest() {
+    enterGuest()
+    navigate(target, { replace: true })
   }
 
   return (
@@ -268,6 +276,15 @@ export default function Login() {
               <p className="mt-0.5 text-[10.5px] text-ink-500">demo@nutrimind.app · demo1234</p>
             </div>
             <ArrowRight size={15} className="text-ink-500" />
+          </button>
+
+          <button
+            type="button"
+            onClick={enterAsGuest}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 py-2.5 text-[11.5px] font-medium text-ink-500 transition-colors hover:text-ink-900"
+          >
+            <UserRound size={13} />
+            先以游客身份体验，稍后再登录
           </button>
 
           <p className="mt-6 text-center text-[10.5px] leading-relaxed text-ink-500">

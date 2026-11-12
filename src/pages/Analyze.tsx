@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { analyzeMeal } from '../lib/ai'
 import { FOOD_MAP } from '../data/foods'
 import {
@@ -50,6 +51,7 @@ function guessMealType(): MealType {
 
 export default function Analyze() {
   const { profile, aiStatus, targets, todayNutrition, addMeal, notify } = useApp()
+  const { requireAuth } = useAuth()
   const [input, setInput] = useState('')
   const [mealType, setMealType] = useState<MealType>(guessMealType)
   const [image, setImage] = useState<string | null>(null)
@@ -74,6 +76,7 @@ export default function Analyze() {
       notify('请描述你吃了什么，或上传一张餐食照片', 'error')
       return
     }
+    if (!requireAuth('AI 营养分析')) return
     setLoading(true)
     setStep(1)
     setResult(null)

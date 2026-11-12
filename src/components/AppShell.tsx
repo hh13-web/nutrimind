@@ -29,14 +29,13 @@ const MOBILE_NAV = NAV.slice(0, 5)
 
 export default function AppShell() {
   const { profile, aiStatus } = useApp()
-  const { logout } = useAuth()
+  const { isGuest } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const aiReady = aiStatus.configured
 
   function handleLogout() {
-    logout()
-    navigate('/login', { replace: true })
+    navigate('/logout')
   }
 
   return (
@@ -97,7 +96,13 @@ export default function AppShell() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-semibold text-ink-900">{profile.name}</p>
                 <p className="truncate text-[11px] text-ink-500">
-                  {profile.goal === 'lose' ? '减脂塑形' : profile.goal === 'gain' ? '增肌增重' : '维持健康'}
+                  {isGuest
+                    ? '游客模式 · 数据仅存本机'
+                    : profile.goal === 'lose'
+                      ? '减脂塑形'
+                      : profile.goal === 'gain'
+                        ? '增肌增重'
+                        : '维持健康'}
                 </p>
               </div>
               <ArrowUpRight size={14} className="text-ink-500" />
@@ -105,12 +110,22 @@ export default function AppShell() {
             <button
               onClick={handleLogout}
               className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-ink-500 transition-colors hover:bg-coral/10 hover:text-coral"
-              aria-label="退出登录"
-              title="退出登录"
+              aria-label={isGuest ? '退出游客模式' : '退出登录'}
+              title={isGuest ? '退出游客模式' : '退出登录'}
             >
               <LogOut size={15} />
             </button>
           </div>
+
+          {isGuest && (
+            <NavLink
+              to="/login"
+              className="flex items-center justify-between rounded-2xl border border-dashed border-clay bg-cream/60 px-3.5 py-2.5 text-[11.5px] font-semibold text-ink-600 transition-colors hover:border-ink-900/25 hover:text-ink-900"
+            >
+              登录 / 注册保存数据
+              <ArrowUpRight size={13} />
+            </NavLink>
+          )}
         </div>
       </aside>
 
@@ -132,7 +147,7 @@ export default function AppShell() {
           <button
             onClick={handleLogout}
             className="grid h-8 w-8 place-items-center rounded-full text-ink-500 transition-colors hover:bg-coral/10 hover:text-coral"
-            aria-label="退出登录"
+            aria-label={isGuest ? '退出游客模式' : '退出登录'}
           >
             <LogOut size={15} />
           </button>

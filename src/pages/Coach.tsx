@@ -10,6 +10,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { coachReply } from '../lib/ai'
 import { MarkdownLite } from '../components/ui'
 import { pct } from '../lib/nutrition'
@@ -37,6 +38,7 @@ export default function Coach() {
     todayMeals,
     notify,
   } = useApp()
+  const { requireAuth } = useAuth()
   const [draft, setDraft] = useState('')
   const [pending, setPending] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
@@ -52,6 +54,7 @@ export default function Coach() {
   async function send(text?: string) {
     const question = (text ?? draft).trim()
     if (!question || pending) return
+    if (!requireAuth('AI 营养师')) return
     setDraft('')
     setPending(true)
 

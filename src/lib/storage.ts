@@ -70,7 +70,16 @@ const round1 = (v: number) => Math.round(v * 10) / 10
 
 export function buildDefaultProfile(): Profile {
   const user = getSessionUser()
-  if (!user) return { ...DEFAULT_PROFILE }
+  if (!user) {
+    return {
+      ...DEFAULT_PROFILE,
+      name: '游客',
+      goal: 'maintain',
+      targetWeight: DEFAULT_PROFILE.weight,
+      allergies: [],
+      dietPreferences: [],
+    }
+  }
 
   const rand = mulberry32(hash(`profile:${user.id}`))
   const gender: Gender = rand() > 0.45 ? 'female' : 'male'

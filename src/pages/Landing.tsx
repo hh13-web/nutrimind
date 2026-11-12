@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   ArrowUpRight,
@@ -18,6 +18,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react'
 import { Logo, MacroSplit, Ring } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
 
 function useReveal<T extends HTMLElement>() {
   const ref = useRef<T | null>(null)
@@ -63,6 +64,18 @@ function Reveal({
 
 function TopNav() {
   const [scrolled, setScrolled] = useState(false)
+  const navigate = useNavigate()
+  const { user, enterGuest } = useAuth()
+
+  function startFree() {
+    if (user) {
+      navigate('/app')
+      return
+    }
+    enterGuest()
+    navigate('/app')
+  }
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
     onScroll()
@@ -103,10 +116,10 @@ function TopNav() {
           >
             登录
           </Link>
-          <Link to="/login" className="btn-primary px-4 py-2.5 text-[13px]">
+          <button onClick={startFree} className="btn-primary px-4 py-2.5 text-[13px]">
             免费开始
             <ArrowUpRight size={15} />
-          </Link>
+          </button>
         </div>
       </div>
     </header>
