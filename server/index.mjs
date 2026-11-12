@@ -121,8 +121,15 @@ function authUser(req) {
   const header = req.headers.authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
   const data = verifyToken(token)
-  if (!data) return null
-  return users.find((u) => u.id === data.sub) || null
+  if (!data?.sub) return null
+  // 令牌自身已包含公开身份；即使请求落在另一个实例上，也能保持登录态
+  return (
+    users.find((u) => u.id === data.sub) || {
+      id: data.sub,
+      email: data.email,
+      name: data.name,
+    }
+  )
 }
 
 const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name })
