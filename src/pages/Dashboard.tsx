@@ -52,13 +52,18 @@ export default function Dashboard() {
     insights.push({ text: '今天还没有记录。用一句话描述你吃过的食物，我会立刻拆解营养结构。', tone: 'info' })
   } else {
     const proteinGap = Math.round(targets.protein - todayNutrition.protein)
+    const proteinFix = profile.dietPreferences.includes('素食')
+      ? '300ml 无糖豆浆或 150g 北豆腐'
+      : profile.allergies.includes('鸡蛋')
+        ? '100g 鸡胸肉或 150g 希腊酸奶'
+        : '100g 三文鱼或 2 个鸡蛋'
     if (proteinGap > 15) {
       insights.push({
-        text: `蛋白质还差 ${proteinGap}g。晚餐加 100g 三文鱼或 2 个鸡蛋，可以稳稳补上。`,
+        text: `蛋白质还差 ${proteinGap}g。下一餐加 ${proteinFix}，可以稳稳补上。`,
         tone: 'warn',
       })
     } else if (proteinGap > 0) {
-      insights.push({ text: `蛋白质只差 ${proteinGap}g，喝一杯希腊酸奶就够了。`, tone: 'good' })
+      insights.push({ text: `蛋白质只差 ${proteinGap}g，一杯希腊酸奶或一份豆制品就够了。`, tone: 'good' })
     } else {
       insights.push({ text: '蛋白质已达标，注意平均分配到三餐，吸收效率更高。', tone: 'good' })
     }
@@ -75,6 +80,25 @@ export default function Dashboard() {
       insights.push({ text: '热量已超出目标，晚间建议以蔬菜与蛋白质为主，避免精制碳水。', tone: 'warn' })
     } else if (calPct > 75 && calPct <= 100) {
       insights.push({ text: `还剩 ${left} kcal 的空间，晚餐控制在 500 kcal 内即可。`, tone: 'info' })
+    }
+    if (avgCalories > 0) {
+      const diff = avgCalories - targets.calories
+      if (Math.abs(diff) >= 80) {
+        insights.push({
+          text: `近 7 天平均摄入 ${avgCalories} kcal，${diff > 0 ? `比你的目标高 ${diff}` : `比你的目标低 ${-diff}`} kcal，${
+            profile.goal === 'lose'
+              ? diff > 0
+                ? '建议减少外卖与含糖饮料。'
+                : '缺口偏大，注意别掉肌肉。'
+              : profile.goal === 'gain'
+                ? diff > 0
+                  ? '增肌期允许小幅盈余，继续观察体重变化。'
+                  : '热量偏低，增肌需要更充足的碳水。'
+                : '整体稳定，继续保持即可。'
+          }`,
+          tone: diff > 0 ? 'warn' : 'good',
+        })
+      }
     }
   }
 

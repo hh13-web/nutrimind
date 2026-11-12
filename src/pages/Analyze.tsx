@@ -14,7 +14,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { analyzeMeal, isAIEnabled } from '../lib/ai'
+import { analyzeMeal } from '../lib/ai'
 import { FOOD_MAP } from '../data/foods'
 import {
   addNutrition,
@@ -49,7 +49,7 @@ function guessMealType(): MealType {
 }
 
 export default function Analyze() {
-  const { profile, config, targets, todayNutrition, addMeal, notify } = useApp()
+  const { profile, aiStatus, targets, todayNutrition, addMeal, notify } = useApp()
   const [input, setInput] = useState('')
   const [mealType, setMealType] = useState<MealType>(guessMealType)
   const [image, setImage] = useState<string | null>(null)
@@ -58,7 +58,7 @@ export default function Analyze() {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [added, setAdded] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const aiReady = isAIEnabled(config)
+  const aiReady = aiStatus.configured
 
   const remaining = Math.max(0, Math.round(targets.calories - todayNutrition.calories))
 
@@ -80,7 +80,7 @@ export default function Analyze() {
     setAdded(false)
     const timer = window.setInterval(() => setStep((s) => Math.min(3, s + 1)), 900)
     try {
-      const res = await analyzeMeal(input.trim(), profile, mealType, config, image ?? undefined)
+      const res = await analyzeMeal(input.trim(), profile, mealType, aiStatus, image ?? undefined)
       setResult(res)
       setStep(4)
       notify(
@@ -164,7 +164,7 @@ export default function Analyze() {
           }`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${aiReady ? 'bg-lime-600' : 'bg-ink-500/40'}`} />
-          {aiReady ? `AI 大模型 · ${config.model}` : '本地营养引擎'}
+          {aiReady ? `服务端大模型 · ${aiStatus.model}` : '本地营养引擎'}
         </span>
       </div>
 

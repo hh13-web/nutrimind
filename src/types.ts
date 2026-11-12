@@ -72,12 +72,6 @@ export interface ChatMessage {
   engine?: 'llm' | 'local'
 }
 
-export interface AIConfig {
-  baseUrl: string
-  apiKey: string
-  model: string
-}
-
 export interface MacroTargets {
   calories: number
   protein: number

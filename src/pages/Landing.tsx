@@ -98,12 +98,12 @@ function TopNav() {
         </nav>
         <div className="flex items-center gap-2">
           <Link
-            to="/app"
+            to="/login"
             className="btn-ghost hidden px-4 py-2 text-[13px] sm:inline-flex"
           >
-            进入工作台
+            登录
           </Link>
-          <Link to="/app/analyze" className="btn-primary px-4 py-2.5 text-[13px]">
+          <Link to="/login" className="btn-primary px-4 py-2.5 text-[13px]">
             免费开始
             <ArrowUpRight size={15} />
           </Link>
@@ -707,7 +707,7 @@ function FinalCTA() {
           <div className="pointer-events-none absolute -bottom-24 -right-10 h-72 w-72 rounded-full bg-sky/10 blur-3xl" />
           <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/70">
             <Sparkles size={12} className="text-lime-400" />
-            无需注册 · 数据仅存本地 · 随时开始
+            邮箱登录 · 数据按账号隔离 · 随时开始
           </span>
           <h2 className="mx-auto mt-6 max-w-2xl text-[clamp(1.9rem,4vw,3rem)] font-semibold leading-[1.12] tracking-[-0.02em] text-white">
             今天这一餐，
@@ -718,15 +718,15 @@ function FinalCTA() {
             从一句话开始。知膳会替你完成剩下的计算、推理与建议。
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/app/analyze" className="btn-lime group px-6 py-3.5 text-[14px]">
+            <Link to="/login" className="btn-lime group px-6 py-3.5 text-[14px]">
               开始 AI 营养分析
               <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
-              to="/app"
+              to="/login"
               className="btn border border-white/15 px-6 py-3.5 text-[14px] text-white hover:bg-white/10"
             >
-              浏览示例工作台
+              登录后体验
             </Link>
           </div>
         </div>
@@ -751,7 +751,7 @@ function Footer() {
           <a href="#features" className="hover:text-ink-900">核心能力</a>
           <a href="#how" className="hover:text-ink-900">工作机制</a>
           <a href="#science" className="hover:text-ink-900">科学依据</a>
-          <Link to="/app/profile" className="hover:text-ink-900">AI 设置</Link>
+          <Link to="/login" className="hover:text-ink-900">登录</Link>
           <span className="text-ink-500/60">© {new Date().getFullYear()} 知膳 NutriMind</span>
         </div>
       </div>

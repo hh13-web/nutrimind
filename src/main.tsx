@@ -3,14 +3,14 @@ import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
-import { AppProvider } from './context/AppContext'
+import { AuthProvider } from './context/AuthContext'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <HashRouter>
-      <AppProvider>
+      <AuthProvider>
         <App />
-      </AppProvider>
+      </AuthProvider>
     </HashRouter>
   </React.StrictMode>,
 )

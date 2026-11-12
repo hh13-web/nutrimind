@@ -1,18 +1,19 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
   ChartLine,
   ClipboardList,
   LayoutDashboard,
+  LogOut,
   MessageCircleMore,
   Sparkles,
   UserRound,
   Wifi,
   WifiOff,
 } from 'lucide-react'
-import { Logo } from './ui'
+import { Logo, Toasts } from './ui'
 import { useApp } from '../context/AppContext'
-import { isAIEnabled } from '../lib/ai'
+import { useAuth } from '../context/AuthContext'
 import { prettyDate, todayKey } from '../lib/nutrition'
 
 const NAV = [
@@ -27,9 +28,16 @@ const NAV = [
 const MOBILE_NAV = NAV.slice(0, 5)
 
 export default function AppShell() {
-  const { profile, config } = useApp()
+  const { profile, aiStatus } = useApp()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   const { pathname } = useLocation()
-  const aiReady = isAIEnabled(config)
+  const aiReady = aiStatus.configured
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <div className="min-h-screen bg-cream">
@@ -74,25 +82,35 @@ export default function AppShell() {
               {aiReady ? '大模型已连接' : '本地营养引擎'}
             </p>
             <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-500">
-              {aiReady ? config.model : '离线规则引擎 · 可在档案页接入大模型'}
+              {aiReady ? `服务端 · ${aiStatus.model}` : '服务端未配置模型 · 离线规则引擎运行中'}
             </p>
           </div>
 
-          <NavLink
-            to="/app/profile"
-            className="flex items-center gap-3 rounded-2xl border border-transparent p-2 transition-colors hover:border-clay hover:bg-cream/70"
-          >
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink-900 text-[13px] font-semibold text-lime-400">
-              {profile.name.slice(0, 1)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-ink-900">{profile.name}</p>
-              <p className="truncate text-[11px] text-ink-500">
-                {profile.goal === 'lose' ? '减脂塑形' : profile.goal === 'gain' ? '增肌增重' : '维持健康'}
-              </p>
-            </div>
-            <ArrowUpRight size={14} className="text-ink-500" />
-          </NavLink>
+          <div className="flex items-center gap-1">
+            <NavLink
+              to="/app/profile"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-transparent p-2 transition-colors hover:border-clay hover:bg-cream/70"
+            >
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink-900 text-[13px] font-semibold text-lime-400">
+                {profile.name.slice(0, 1)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-ink-900">{profile.name}</p>
+                <p className="truncate text-[11px] text-ink-500">
+                  {profile.goal === 'lose' ? '减脂塑形' : profile.goal === 'gain' ? '增肌增重' : '维持健康'}
+                </p>
+              </div>
+              <ArrowUpRight size={14} className="text-ink-500" />
+            </NavLink>
+            <button
+              onClick={handleLogout}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-ink-500 transition-colors hover:bg-coral/10 hover:text-coral"
+              aria-label="退出登录"
+              title="退出登录"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -111,6 +129,13 @@ export default function AppShell() {
           >
             {profile.name.slice(0, 1)}
           </NavLink>
+          <button
+            onClick={handleLogout}
+            className="grid h-8 w-8 place-items-center rounded-full text-ink-500 transition-colors hover:bg-coral/10 hover:text-coral"
+            aria-label="退出登录"
+          >
+            <LogOut size={15} />
+          </button>
         </div>
       </header>
 
@@ -150,6 +175,8 @@ export default function AppShell() {
           ))}
         </div>
       </nav>
+
+      <Toasts />
     </div>
   )
 }

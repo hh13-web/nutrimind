@@ -1,21 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { AIConfig, ChatMessage, Meal, Profile } from '../types'
+import type { ChatMessage, Meal, Profile } from '../types'
 import {
-  DEFAULT_PROFILE,
-  WELCOME_MESSAGE,
+  buildDefaultProfile,
   buildSeedMeals,
+  buildWelcomeMessage,
   isSeeded,
-  loadAIConfig,
   loadChat,
   loadMeals,
   loadProfile,
   markSeeded,
-  saveAIConfig,
   saveChat,
   saveMeals,
   saveProfile,
 } from '../lib/storage'
 import { calcTargets, sumMeals, todayKey } from '../lib/nutrition'
+import { fetchAIStatus, type ServerAIStatus } from '../lib/api'
 
 interface Toast {
   id: number
@@ -36,8 +35,8 @@ interface AppContextValue {
   addChatMessage: (msg: ChatMessage) => void
   updateChatMessage: (id: string, content: string, engine?: 'llm' | 'local') => void
   clearChat: () => void
-  config: AIConfig
-  setConfig: (c: AIConfig) => void
+  aiStatus: ServerAIStatus
+  refreshAIStatus: () => Promise<ServerAIStatus>
   toasts: Toast[]
   notify: (message: string, tone?: Toast['tone']) => void
   dismissToast: (id: number) => void
@@ -45,14 +44,6 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
-
-const welcomeMessage: ChatMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  content: WELCOME_MESSAGE,
-  createdAt: Date.now(),
-  engine: 'local',
-}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfileState] = useState<Profile>(() => loadProfile())
@@ -67,10 +58,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return []
   })
-  const [chat, setChat] = useState<ChatMessage[]>(() => loadChat() ?? [welcomeMessage])
-  const [config, setConfigState] = useState<AIConfig>(() => loadAIConfig())
+  const [chat, setChat] = useState<ChatMessage[]>(() => {
+    const stored = loadChat()
+    if (stored) return stored
+    return [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: buildWelcomeMessage(profile.name),
+        createdAt: Date.now(),
+        engine: 'local',
+      },
+    ]
+  })
+  const [aiStatus, setAIStatus] = useState<ServerAIStatus>({ configured: false, model: '' })
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastId = useRef(0)
+
+  const refreshAIStatus = useCallback(async (): Promise<ServerAIStatus> => {
+    let next: ServerAIStatus
+    try {
+      next = await fetchAIStatus()
+    } catch {
+      next = { configured: false, model: '' }
+    }
+    setAIStatus(next)
+    return next
+  }, [])
+
+  useEffect(() => {
+    refreshAIStatus()
+  }, [refreshAIStatus])
 
   useEffect(() => {
     saveProfile(profile)
@@ -105,12 +123,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const clearChat = useCallback(() => {
-    setChat([{ ...welcomeMessage, createdAt: Date.now() }])
-  }, [])
-
-  const setConfig = useCallback((c: AIConfig) => {
-    setConfigState(c)
-    saveAIConfig(c)
+    setChat([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: buildWelcomeMessage(loadProfile().name),
+        createdAt: Date.now(),
+        engine: 'local',
+      },
+    ])
   }, [])
 
   const dismissToast = useCallback((id: number) => {
@@ -129,10 +150,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   )
 
   const resetDemoData = useCallback(() => {
+    const fresh = buildDefaultProfile()
+    saveProfile(fresh)
+    setProfileState(fresh)
     const seeded = buildSeedMeals()
     setMeals(seeded)
-    setProfileState(DEFAULT_PROFILE)
-    setChat([{ ...welcomeMessage, createdAt: Date.now() }])
+    setChat([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: buildWelcomeMessage(),
+        createdAt: Date.now(),
+        engine: 'local',
+      },
+    ])
     notify('示例数据已重置', 'info')
   }, [notify])
 
@@ -153,8 +184,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addChatMessage,
     updateChatMessage,
     clearChat,
-    config,
-    setConfig,
+    aiStatus,
+    refreshAIStatus,
     toasts,
     notify,
     dismissToast,

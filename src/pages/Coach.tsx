@@ -10,18 +10,17 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { coachReply, isAIEnabled } from '../lib/ai'
+import { coachReply } from '../lib/ai'
 import { MarkdownLite } from '../components/ui'
-import { Link } from 'react-router-dom'
 import { pct } from '../lib/nutrition'
 import type { ChatMessage } from '../types'
 
 const QUICK_QUESTIONS = [
   '今天吃得怎么样？',
+  '早上吃什么不容易饿？',
   '晚餐吃什么不容易饿？',
   '蛋白质还差多少，怎么补？',
   '帮我安排明天的一日三餐',
-  '外卖怎么点更健康？',
 ]
 
 export default function Coach() {
@@ -32,7 +31,7 @@ export default function Coach() {
     clearChat,
     profile,
     meals,
-    config,
+    aiStatus,
     targets,
     todayNutrition,
     todayMeals,
@@ -42,7 +41,7 @@ export default function Coach() {
   const [pending, setPending] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const aiReady = isAIEnabled(config)
+  const aiReady = aiStatus.configured
 
   useEffect(() => {
     const el = scrollRef.current
@@ -79,7 +78,7 @@ export default function Coach() {
         chat.filter((m) => m.id !== 'welcome'),
         question,
         { profile, meals },
-        config,
+        aiStatus,
         (delta) => {
           buffer += delta
           updateChatMessage(replyId, buffer)
@@ -106,7 +105,7 @@ export default function Coach() {
             </span>
             <div>
               <p className="text-[13.5px] font-semibold text-ink-900">知膳 AI 营养师</p>
-              <p className="text-[10.5px] text-ink-500">{aiReady ? config.model : '本地营养引擎'}</p>
+              <p className="text-[10.5px] text-ink-500">{aiReady ? aiStatus.model : '本地营养引擎'}</p>
             </div>
           </div>
           <div className="mt-4 flex items-start gap-2 rounded-xl bg-cream/70 p-2.5">
@@ -117,8 +116,8 @@ export default function Coach() {
             )}
             <p className="text-[10.5px] leading-relaxed text-ink-600">
               {aiReady
-                ? '已接入大模型，结合你的档案与今日记录实时推理。'
-                : '离线规则引擎运行中，可在健康档案页接入大模型获得更强推理。'}
+                ? '已接入服务端大模型，结合你的档案与今日记录实时推理。'
+                : '当前使用本地营养引擎；大模型由服务端统一配置，启用后自动切换。'}
             </p>
           </div>
         </div>
@@ -275,10 +274,7 @@ export default function Coach() {
             </button>
           </div>
           <p className="mt-2 text-center text-[9.5px] text-ink-500/70">
-            AI 可能出错，请结合实际情况判断 ·{' '}
-            <Link to="/app/profile" className="underline underline-offset-2 hover:text-ink-900">
-              配置 AI 引擎
-            </Link>
+            AI 可能出错，请结合实际情况判断 · 模型与密钥由服务端统一管理
           </p>
         </div>
       </div>

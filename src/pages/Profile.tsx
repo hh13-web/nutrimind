@@ -4,13 +4,11 @@ import {
   Check,
   Cpu,
   Database,
-  Eye,
-  EyeOff,
-  KeyRound,
   Loader2,
+  RefreshCw,
   RotateCcw,
   Ruler,
-  Save,
+  Server,
   Sparkles,
   UserRound,
   Weight,
@@ -23,8 +21,7 @@ import {
   calcBMR,
   calcTDEE,
 } from '../lib/nutrition'
-import { MEAL_LABELS } from '../types'
-import type { ActivityLevel, AIConfig, Goal, Profile as ProfileType } from '../types'
+import type { ActivityLevel, Goal, Profile as ProfileType } from '../types'
 
 const ACTIVITY_META: { key: ActivityLevel; label: string; desc: string }[] = [
   { key: 'sedentary', label: '久坐少动', desc: '几乎不运动 · 系数 1.2' },
@@ -89,10 +86,8 @@ function Field({
 }
 
 export default function Profile() {
-  const { profile, updateProfile, config, setConfig, targets, resetDemoData, notify } = useApp()
-  const [cfg, setCfg] = useState<AIConfig>(config)
-  const [showKey, setShowKey] = useState(false)
-  const [testing, setTesting] = useState(false)
+  const { profile, updateProfile, aiStatus, refreshAIStatus, targets, resetDemoData, notify } = useApp()
+  const [refreshing, setRefreshing] = useState(false)
 
   const bmi = calcBMI(profile)
   const bmiInfo = bmiLabel(bmi)
@@ -106,32 +101,14 @@ export default function Profile() {
     set({ [key]: list.includes(value) ? list.filter((x) => x !== value) : [...list, value] } as Partial<ProfileType>)
   }
 
-  async function testConnection() {
-    if (!cfg.apiKey.trim()) {
-      notify('请先填写 API Key，留空时将使用本地营养引擎', 'error')
-      return
-    }
-    setTesting(true)
-    try {
-      const res = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/models`, {
-        headers: { Authorization: `Bearer ${cfg.apiKey}` },
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      notify('连接成功，AI 引擎可用', 'success')
-    } catch {
-      notify('连接失败，请检查 Base URL、Key 或网络；也可先使用本地引擎', 'error')
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  function saveAI() {
-    setConfig({
-      baseUrl: cfg.baseUrl.trim() || 'https://api.openai.com/v1',
-      apiKey: cfg.apiKey.trim(),
-      model: cfg.model.trim() || 'gpt-4o-mini',
-    })
-    notify(cfg.apiKey.trim() ? 'AI 引擎配置已保存' : '已切换为本地营养引擎', 'success')
+  async function checkAI() {
+    setRefreshing(true)
+    const status = await refreshAIStatus()
+    setRefreshing(false)
+    notify(
+      status.configured ? `已连接服务端 AI 引擎 · ${status.model}` : '服务端未配置 AI 引擎，当前使用本地营养引擎',
+      'info',
+    )
   }
 
   return (
@@ -401,86 +378,57 @@ export default function Profile() {
             </p>
           </div>
 
-          {/* AI 设置 */}
-          <Section icon={Cpu} title="AI 引擎设置" desc="接入任意 OpenAI 兼容接口，未配置时使用本地引擎">
+          {/* AI 引擎状态（只读，由服务端统一配置） */}
+          <Section icon={Cpu} title="AI 引擎状态" desc="模型与密钥由服务端统一管理，不在浏览器中配置">
             <div className="space-y-3">
-              <Field label="API Base URL">
-                <input
-                  className="input text-[12px]"
-                  value={cfg.baseUrl}
-                  onChange={(e) => setCfg({ ...cfg, baseUrl: e.target.value })}
-                  placeholder="https://api.openai.com/v1"
-                />
-              </Field>
-              <Field label="API Key" hint="仅保存在你的浏览器 localStorage，不会上传到任何服务器">
-                <div className="relative">
-                  <KeyRound size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-                  <input
-                    className="input px-10 text-[12px]"
-                    type={showKey ? 'text' : 'password'}
-                    value={cfg.apiKey}
-                    onChange={(e) => setCfg({ ...cfg, apiKey: e.target.value })}
-                    placeholder="sk-..."
-                    autoComplete="off"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-ink-900"
-                  >
-                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </Field>
-              <Field label="模型" hint="需支持 JSON 输出；图片识别需多模态模型，如 gpt-4o-mini / qwen-vl-max">
-                <input
-                  className="input text-[12px]"
-                  value={cfg.model}
-                  onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
-                  placeholder="gpt-4o-mini"
-                />
-              </Field>
-              <div className="flex gap-2">
-                <button onClick={saveAI} className="btn-primary flex-1 px-4 py-2.5 text-[12px]">
-                  <Save size={14} />
-                  保存配置
-                </button>
-                <button onClick={testConnection} disabled={testing} className="btn-ghost px-4 py-2.5 text-[12px]">
-                  {testing ? <Loader2 size={14} className="animate-spin" /> : <Cpu size={14} />}
-                  测试连接
-                </button>
-              </div>
               <div
-                className={`flex items-start gap-2 rounded-xl px-3 py-2 ${
-                  config.apiKey ? 'bg-lime-400/15' : 'bg-cream/80'
+                className={`flex items-start gap-2.5 rounded-xl px-3.5 py-3 ${
+                  aiStatus.configured ? 'bg-lime-400/15' : 'bg-cream/80'
                 }`}
               >
-                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${config.apiKey ? 'bg-lime-500' : 'bg-ink-500/40'}`} />
-                <p className="text-[10px] leading-relaxed text-ink-600">
-                  {config.apiKey
-                    ? `当前已接入 ${config.model}，AI 分析与对话将走大模型。`
-                    : '当前使用本地营养引擎：基于 100+ 食物库与规则推理，无需联网即可完成分析与对话。'}
+                <Server size={14} className="mt-0.5 shrink-0 text-ink-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-900">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        aiStatus.configured ? 'bg-lime-600' : 'bg-ink-500/40'
+                      }`}
+                    />
+                    {aiStatus.configured ? '服务端大模型已启用' : '本地营养引擎运行中'}
+                  </p>
+                  <p className="mt-1 text-[10.5px] leading-relaxed text-ink-600">
+                    {aiStatus.configured
+                      ? `当前模型：${aiStatus.model}。AI 分析与营养师对话均由服务端代理调用，浏览器不会接触到 API Key。`
+                      : '后端尚未配置模型密钥，AI 分析与对话会自动使用内置的 100+ 食物库与规则引擎，功能仍可完整体验。'}
+                  </p>
+                </div>
+              </div>
+
+              <button onClick={checkAI} disabled={refreshing} className="btn-ghost w-full px-4 py-2.5 text-[12px]">
+                {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                刷新引擎状态
+              </button>
+
+              <div className="rounded-xl bg-cream/70 px-3.5 py-2.5">
+                <p className="text-[10px] leading-relaxed text-ink-500">
+                  部署时在服务端设置 <span className="font-mono">AI_BASE_URL</span>、
+                  <span className="font-mono"> AI_API_KEY</span>、<span className="font-mono">AI_MODEL</span>{' '}
+                  环境变量即可自动启用，无需改动前端。
                 </p>
               </div>
             </div>
           </Section>
 
           {/* 数据 */}
-          <Section icon={Database} title="数据管理" desc="所有记录仅保存在此浏览器">
+          <Section icon={Database} title="数据管理" desc="记录按账号隔离保存在当前浏览器">
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => {
-                  resetDemoData()
-                  setCfg(config)
-                }}
-                className="btn-ghost btn-sm"
-              >
+              <button onClick={resetDemoData} className="btn-ghost btn-sm">
                 <RotateCcw size={13} />
                 重置为示例数据
               </button>
             </div>
             <div className="mt-4 space-y-1.5 text-[10.5px] text-ink-500">
-              <p>· 健康档案、饮食记录与 AI 配置均存储于 localStorage</p>
+              <p>· 健康档案、饮食记录与对话按登录账号独立存储于 localStorage</p>
               <p>· 清除浏览器站点数据会同时清空以上内容</p>
               <p>· 菜谱与营养数据参考《中国食物成分表》与 USDA</p>
             </div>

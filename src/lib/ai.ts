@@ -1,5 +1,4 @@
 import type {
-  AIConfig,
   AnalysisItem,
   AnalysisResult,
   ChatMessage,
@@ -27,18 +26,11 @@ import {
   suggestMealPlan,
   todayKey,
 } from './nutrition'
+import { aiChat, aiChatStream, type ChatPayloadMessage, type ServerAIStatus } from './api'
 
 // ─────────────────────────────────────────────────────────────
-// 通用：OpenAI 兼容接口调用
+// 通用：服务端 AI 代理（密钥保存在后端环境变量，前端不接触）
 // ─────────────────────────────────────────────────────────────
-
-function endpoint(config: AIConfig): string {
-  return `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`
-}
-
-export function isAIEnabled(config: AIConfig): boolean {
-  return Boolean(config.apiKey && config.baseUrl && config.model)
-}
 
 function normalizeItems(items: AnalysisItem[]): Nutrition {
   return roundNutrition(items.reduce((acc, it) => addNutrition(acc, it.nutrition), zeroNutrition()))
@@ -51,33 +43,9 @@ function extractJSON(text: string): any {
   return JSON.parse(text.slice(start, end + 1))
 }
 
-async function callChat(
-  config: AIConfig,
-  messages: { role: string; content: unknown }[],
-  signal?: AbortSignal,
-): Promise<string> {
-  const res = await fetch(endpoint(config), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: 0.5,
-      max_tokens: 1200,
-    }),
-    signal,
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`AI 接口请求失败（${res.status}）${detail.slice(0, 160)}`)
-  }
-  const data = await res.json()
-  const content = data?.choices?.[0]?.message?.content
-  if (!content) throw new Error('AI 接口返回内容为空')
-  return content as string
+function callChat(messages: ChatPayloadMessage[], signal?: AbortSignal): Promise<string> {
+  void signal
+  return aiChat(messages, { temperature: 0.5, max_tokens: 1200 })
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -298,37 +266,29 @@ export async function analyzeMeal(
   input: string,
   profile: Profile,
   mealType: MealType,
-  config: AIConfig,
+  aiStatus: ServerAIStatus,
   image?: string,
 ): Promise<AnalysisResult> {
   const local = analyzeMealLocal(input || '一餐', profile, mealType)
-  if (!isAIEnabled(config)) return local
-
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 60000)
+  if (!aiStatus.configured) return local
 
   const prompt = `用餐时段：${MEAL_LABELS[mealType]}
 用户画像：${profile.gender === 'female' ? '女性' : '男性'}，${profile.age}岁，${profile.height}cm，${profile.weight}kg，目标：${profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}，饮食偏好：${profile.dietPreferences.join('、') || '无'}，过敏：${profile.allergies.join('、') || '无'}
 餐食描述：${input || '（见图片）'}`
 
   try {
-    const raw = await callChat(
-      config,
-      [
-        { role: 'system', content: ANALYZE_SYSTEM },
-        {
-          role: 'user',
-          content: image
-            ? [
-                { type: 'text', text: `${prompt}\n请结合图片识别餐食内容与份量。` },
-                { type: 'image_url', image_url: { url: image } },
-              ]
-            : prompt,
-        },
-      ],
-      controller.signal,
-    )
-    clearTimeout(timer)
+    const raw = await callChat([
+      { role: 'system', content: ANALYZE_SYSTEM },
+      {
+        role: 'user',
+        content: image
+          ? [
+              { type: 'text', text: `${prompt}\n请结合图片识别餐食内容与份量。` },
+              { type: 'image_url', image_url: { url: image } },
+            ]
+          : prompt,
+      },
+    ])
     const json = extractJSON(raw)
     const rawItems = Array.isArray(json.items) ? json.items : []
     if (rawItems.length === 0) throw new Error('模型未识别出食物')
@@ -373,7 +333,6 @@ export async function analyzeMeal(
       mealType,
     }
   } catch (err) {
-    clearTimeout(timer)
     console.warn('[知膳] LLM 分析失败，已降级到本地营养引擎：', err)
     return local
   }
@@ -402,7 +361,8 @@ const COACH_SYSTEM = `你是「知膳」AI 营养师，一位温和、专业、�
 2. 优先给出具体食物、克数与可执行动作，避免空泛口号。
 3. 结合给出的今日摄入数据做计算，明确指出还差多少。
 4. 不进行疾病诊断或推荐药物；涉及疾病、孕期、用药时提示咨询医生。
-5. 可以适度使用 Markdown（加粗、无序列表），不要输出代码块。`
+5. 可以适度使用 Markdown（加粗、无序列表），不要输出代码块。
+6. 用户点名餐次时，必须只回答该餐次：提到早餐/早上/早晨/早饭时只给早餐方案，午餐/中午只给午餐，晚餐/晚上/夜宵只给晚餐或夜宵，绝不能替换成其他餐次。若用户未点名餐次，则按当前时间推断最合理的一餐。`
 
 export interface CoachContext {
   profile: Profile
@@ -413,78 +373,32 @@ export async function coachReply(
   history: ChatMessage[],
   question: string,
   ctx: CoachContext,
-  config: AIConfig,
+  aiStatus: ServerAIStatus,
   onDelta?: (delta: string) => void,
 ): Promise<{ content: string; engine: 'llm' | 'local' }> {
-  if (!isAIEnabled(config)) {
+  if (!aiStatus.configured) {
     const content = localCoachReply(question, ctx)
     if (onDelta) await typeOut(content, onDelta)
     return { content, engine: 'local' }
   }
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 60000)
-  let content = ''
+  const messages: ChatPayloadMessage[] = [
+    { role: 'system', content: `${COACH_SYSTEM}\n\n${buildContext(ctx.profile, ctx.meals)}` },
+    ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: question },
+  ]
+
   try {
-    const messages = [
-      { role: 'system', content: `${COACH_SYSTEM}\n\n${buildContext(ctx.profile, ctx.meals)}` },
-      ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content: question },
-    ]
-
-    const res = await fetch(endpoint(config), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature: 0.6,
-        max_tokens: 900,
-        stream: true,
-      }),
-      signal: controller.signal,
-    })
-    if (!res.ok || !res.body) throw new Error(`对话接口异常（${res.status}）`)
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
-        try {
-          const json = JSON.parse(payload)
-          const delta = json?.choices?.[0]?.delta?.content
-          if (delta) {
-            content += delta
-            onDelta?.(delta)
-          }
-        } catch {
-          /* 忽略不完整分片 */
-        }
-      }
+    if (onDelta) {
+      const content = await aiChatStream(messages, { temperature: 0.6, max_tokens: 900 }, onDelta)
+      return { content, engine: 'llm' }
     }
-    clearTimeout(timer)
-    if (!content.trim()) throw new Error('对话返回为空')
+    const content = await aiChat(messages, { temperature: 0.6, max_tokens: 900 })
     return { content, engine: 'llm' }
   } catch (err) {
-    clearTimeout(timer)
     console.warn('[知膳] LLM 对话失败，已降级到本地营养师：', err)
     const fallback = localCoachReply(question, ctx)
-    if (onDelta && !content) {
-      await typeOut(fallback, onDelta)
-    }
+    if (onDelta) await typeOut(fallback, onDelta)
     return { content: fallback, engine: 'local' }
   }
 }
@@ -495,6 +409,44 @@ async function typeOut(text: string, onDelta: (d: string) => void) {
     onDelta(c)
     await new Promise((r) => setTimeout(r, 14))
   }
+}
+
+type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+const SLOT_INDEX: Record<MealSlot, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 }
+
+/** 识别用户点名的餐次；「早上/早晨/早饭」都要归到早餐，不能落到午餐 */
+function detectMealSlot(text: string): MealSlot | null {
+  if (/(早餐|早饭|早点|早上|早晨|清晨|brunch)/.test(text)) return 'breakfast'
+  if (/(宵夜|夜宵|加餐|零食|下午茶)/.test(text)) return 'snack'
+  if (/(午餐|午饭|中午|晌午)/.test(text)) return 'lunch'
+  if (/(晚餐|晚饭|晚上|睡前)/.test(text)) return 'dinner'
+  return null
+}
+
+function currentMealSlot(): MealSlot {
+  const h = new Date().getHours()
+  if (h < 10) return 'breakfast'
+  if (h < 15) return 'lunch'
+  if (h < 21) return 'dinner'
+  return 'snack'
+}
+
+function mealPlanReply(
+  slot: MealSlot,
+  plans: ReturnType<typeof suggestMealPlan>,
+  isVeg: boolean,
+  wantsSatiety: boolean,
+) {
+  const plan = plans[SLOT_INDEX[slot]]
+  const satiety = wantsSatiety
+    ? `\n\n**为什么不容易饿：** 蛋白质优先（蛋、奶或豆制品）延缓胃排空，主食选燕麦、红薯、全麦等慢消化碳水让血糖更平稳，再配蔬果补足纤维，饱腹感可以稳定撑过 4 小时。`
+    : ''
+  return `**${plan.title}（约 ${plan.kcal} kcal）**
+
+${plan.items.map((i) => `- ${i}`).join('\n')}
+
+**为什么这样搭：** 蛋白质优先保证饱腹与肌肉，主食选择低升糖来源，蔬菜补足体积与纤维。${isVeg ? '\n你选择了素食，我已用豆制品与蛋奶替代肉类蛋白。' : ''}${satiety}`
 }
 
 /** 本地营养师：基于档案与当日摄入的规则引擎，保证无网络时依然可用 */
@@ -523,6 +475,15 @@ export function localCoachReply(question: string, ctx: CoachContext): string {
 如果你愿意，也可以告诉我具体的饮食困扰，我帮你把餐单做得更友好。`
   }
 
+  const wantsSatiety = /(不容易饿|抗饿|饱腹|饿)/.test(q)
+  const asksForPlan = /(吃什么|吃啥|食谱|菜单|推荐|安排|计划|搭配|怎么吃|不容易饿|抗饿|饱腹)/.test(q)
+  const slot = detectMealSlot(q)
+
+  // 明确点名的餐次优先，避免「早上吃什么」被当成午餐或全天复盘
+  if (slot && asksForPlan) {
+    return mealPlanReply(slot, plans, isVeg, wantsSatiety)
+  }
+
   if (/(今天|现在|评价|怎么样|如何|打分|复盘)/.test(q)) {
     if (today.length === 0) {
       return `今天还没有饮食记录。你可以先去 **AI 营养分析** 页，用一句话描述吃了什么，我会立刻拆解营养。
@@ -543,14 +504,11 @@ ${calLeft > 0 ? `- 剩余热量 ${calLeft} kcal，晚餐按「${plans[2].items.s
 - 饮水补到 1500ml 以上，睡前 2 小时不再进食。`
   }
 
-  if (/(早餐|午餐|晚餐|吃什么|食谱|菜单|推荐|安排|计划|搭配)/.test(q)) {
-    const isBreakfast = /早餐/.test(q)
-    const isLunch = /午餐|中午/.test(q)
-    const isDinner = /晚餐|晚上/.test(q)
-    const plan = isBreakfast ? plans[0] : isLunch ? plans[1] : isDinner ? plans[2] : plans[1]
-    const extra = !isBreakfast && !isLunch && !isDinner
-      ? `\n\n其余两餐可以这样安排：\n- ${plans[0].title}：${plans[0].items.join('、')}\n- ${plans[2].title}：${plans[2].items.join('、')}`
-      : ''
+  if (/(早餐|午餐|晚餐|加餐|吃什么|食谱|菜单|推荐|安排|计划|搭配)/.test(q)) {
+    const targetSlot = currentMealSlot()
+    const plan = plans[SLOT_INDEX[targetSlot]]
+    const others = plans.filter((_, i) => i !== SLOT_INDEX[targetSlot])
+    const extra = `\n\n其余餐次可以这样安排：\n${others.map((p) => `- ${p.title}：${p.items.join('、')}`).join('\n')}`
     return `**${plan.title}（约 ${plan.kcal} kcal）**
 
 ${plan.items.map((i) => `- ${i}`).join('\n')}
