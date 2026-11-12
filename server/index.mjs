@@ -18,13 +18,27 @@ import {
   writeFileSync,
 } from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const STATIC_DIR = process.env.STATIC_DIR ? path.resolve(process.env.STATIC_DIR) : path.join(ROOT, 'dist')
-const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data')
+
+/** 数据目录：优先环境变量；项目目录不可写时（如 Serverless 只读挂载）回退到系统临时目录 */
+function resolveDataDir() {
+  if (process.env.DATA_DIR) return path.resolve(process.env.DATA_DIR)
+  const local = path.join(ROOT, 'data')
+  try {
+    mkdirSync(local, { recursive: true })
+    return local
+  } catch {
+    return path.join(os.tmpdir(), 'nutrimind-data')
+  }
+}
+
+const DATA_DIR = resolveDataDir()
 const USERS_FILE = path.join(DATA_DIR, 'users.json')
 
 const PORT = Number(process.env.PORT) || 8000
