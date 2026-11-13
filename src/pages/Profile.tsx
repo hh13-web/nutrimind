@@ -1,7 +1,9 @@
+import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   Check,
   Ruler,
+  Save,
   Sparkles,
   UserRound,
   Weight,
@@ -12,6 +14,7 @@ import {
   bmiLabel,
   calcBMI,
   calcBMR,
+  calcTargets,
   calcTDEE,
   isProfileComplete,
 } from '../lib/nutrition'
@@ -80,37 +83,96 @@ function Field({
 }
 
 export default function Profile() {
-  const { profile, updateProfile, targets } = useApp()
-  const complete = isProfileComplete(profile)
-  const bmi = calcBMI(profile)
-  const bmiInfo = bmiLabel(bmi)
-  const bmr = calcBMR(profile)
-  const tdee = calcTDEE(profile)
+  const { profile, updateProfile, notify } = useApp()
 
-  const set = (patch: Partial<ProfileType>) => updateProfile(patch)
+  // 草稿：编辑不立即持久化，点「保存档案」才写入
+  const [draft, setDraft] = useState<ProfileType>(profile)
+  const [dirty, setDirty] = useState(false)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+
+  // 切换账号时，草稿跟随新档案
+  useEffect(() => {
+    setDraft(profile)
+    setDirty(false)
+  }, [profile])
+
+  const set = (patch: Partial<ProfileType>) => {
+    setDraft((prev) => ({ ...prev, ...patch }))
+    setDirty(true)
+  }
 
   function toggle(key: 'dietPreferences' | 'allergies', value: string) {
-    const list = profile[key]
+    const list = draft[key]
     set({ [key]: list.includes(value) ? list.filter((x) => x !== value) : [...list, value] } as Partial<ProfileType>)
   }
 
+  function handleSave() {
+    updateProfile(draft)
+    setDirty(false)
+    setSavedAt(Date.now())
+    notify('档案已保存，营养目标已更新', 'success')
+  }
+
+  const complete = isProfileComplete(draft)
+  const bmi = calcBMI(draft)
+  const bmiInfo = bmiLabel(bmi)
+  const bmr = calcBMR(draft)
+  const tdee = calcTDEE(draft)
+  const targets = useMemo(() => calcTargets(draft), [draft])
 
   return (
     <div className="space-y-5">
-      <div>
-        <p className="eyebrow">Health profile</p>
-        <h1 className="mt-1.5 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.02em] text-ink-900">
-          健康档案
-        </h1>
-        <p className="mt-1.5 text-[13px] text-ink-600">
-          档案越准确，AI 的能量与营养目标越贴合你。修改后立即自动保存。
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">Health profile</p>
+          <h1 className="mt-1.5 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.02em] text-ink-900">
+            健康档案
+          </h1>
+          <p className="mt-1.5 text-[13px] text-ink-600">
+            按真实情况填写，AI 会结合这些数据生成你的营养目标与建议。
+          </p>
+        </div>
+
+        {/* 保存状态与按钮 */}
+        <div className="flex items-center gap-3">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${
+              dirty
+                ? 'border-wheat/40 bg-wheat/15 text-wheat'
+                : savedAt
+                  ? 'border-lime-500/30 bg-lime-400/20 text-ink-800'
+                  : 'border-clay bg-paper text-ink-500'
+            }`}
+          >
+            {dirty ? (
+              <>
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-wheat" />
+                有未保存的修改
+              </>
+            ) : savedAt ? (
+              <>
+                <Check size={12} />
+                已保存
+              </>
+            ) : (
+              '暂无修改'
+            )}
+          </span>
+          <button
+            onClick={handleSave}
+            disabled={!dirty}
+            className="btn-primary px-5 py-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Save size={15} />
+            保存档案
+          </button>
+        </div>
       </div>
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-lime-500/25 bg-lime-400/15 px-4 py-3">
         <Sparkles size={14} className="mt-0.5 shrink-0 text-ink-800" />
         <p className="text-[11.5px] leading-relaxed text-ink-800">
-          请按真实情况填写年龄、身高和体重。AI 营养分析与营养师会结合这些数据、活动量和目标生成建议，修改后自动保存。
+          填写年龄、身高、体重后，右侧会实时预览营养目标；确认无误后点击「保存档案」，全站目标与 AI 分析会同步更新。
         </p>
       </div>
 
@@ -121,7 +183,7 @@ export default function Profile() {
               <Field label="称呼">
                 <input
                   className="input"
-                  value={profile.name}
+                  value={draft.name}
                   onChange={(e) => set({ name: e.target.value || '你' })}
                   placeholder="怎么称呼你"
                 />
@@ -136,7 +198,7 @@ export default function Profile() {
                       key={key}
                       onClick={() => set({ gender: key })}
                       className={`rounded-xl border px-3 py-2.5 text-[12.5px] font-medium transition-colors ${
-                        profile.gender === key
+                        draft.gender === key
                           ? 'border-ink-900 bg-ink-900 text-white'
                           : 'border-clay bg-white text-ink-600 hover:border-ink-900/20'
                       }`}
@@ -150,10 +212,9 @@ export default function Profile() {
                 <input
                   type="number"
                   className="input"
-                  value={profile.age || ''}
+                  value={draft.age || ''}
                   min={12}
                   max={90}
-                  required
                   placeholder="请输入年龄"
                   onChange={(e) => set({ age: Number(e.target.value) || 0 })}
                 />
@@ -163,10 +224,9 @@ export default function Profile() {
                   <input
                     type="number"
                     className="input pr-10"
-                    value={profile.height || ''}
+                    value={draft.height || ''}
                     min={130}
                     max={220}
-                    required
                     placeholder="例如 165"
                     onChange={(e) => set({ height: Number(e.target.value) || 0 })}
                   />
@@ -178,11 +238,10 @@ export default function Profile() {
                   <input
                     type="number"
                     className="input pr-10"
-                    value={profile.weight || ''}
+                    value={draft.weight || ''}
                     min={30}
                     max={200}
                     step={0.1}
-                    required
                     placeholder="例如 58.5"
                     onChange={(e) => set({ weight: Number(e.target.value) || 0 })}
                   />
@@ -194,7 +253,7 @@ export default function Profile() {
                   <input
                     type="number"
                     className="input pr-10"
-                    value={profile.targetWeight || ''}
+                    value={draft.targetWeight || ''}
                     min={30}
                     max={200}
                     step={0.1}
@@ -214,7 +273,7 @@ export default function Profile() {
                   key={a.key}
                   onClick={() => set({ activity: a.key })}
                   className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
-                    profile.activity === a.key
+                    draft.activity === a.key
                       ? 'border-ink-900 bg-ink-900/[.03]'
                       : 'border-clay/80 hover:border-ink-900/20'
                   }`}
@@ -238,13 +297,13 @@ export default function Profile() {
                     key={g.key}
                     onClick={() => set({ goal: g.key })}
                     className={`rounded-xl border p-3 text-left transition-colors ${
-                      profile.goal === g.key
+                      draft.goal === g.key
                         ? 'border-ink-900 bg-ink-900 text-white'
                         : 'border-clay bg-white hover:border-ink-900/20'
                     }`}
                   >
                     <p className="text-[12.5px] font-semibold">{g.label}</p>
-                    <p className={`mt-1 text-[10px] leading-snug ${profile.goal === g.key ? 'text-white/60' : 'text-ink-500'}`}>
+                    <p className={`mt-1 text-[10px] leading-snug ${draft.goal === g.key ? 'text-white/60' : 'text-ink-500'}`}>
                       {g.desc}
                     </p>
                   </button>
@@ -261,9 +320,9 @@ export default function Profile() {
                   <button
                     key={p}
                     onClick={() => toggle('dietPreferences', p)}
-                    className={`chip ${profile.dietPreferences.includes(p) ? 'chip-active' : ''}`}
+                    className={`chip ${draft.dietPreferences.includes(p) ? 'chip-active' : ''}`}
                   >
-                    {profile.dietPreferences.includes(p) && <Check size={11} />}
+                    {draft.dietPreferences.includes(p) && <Check size={11} />}
                     {p}
                   </button>
                 ))}
@@ -276,9 +335,9 @@ export default function Profile() {
                   <button
                     key={p}
                     onClick={() => toggle('allergies', p)}
-                    className={`chip ${profile.allergies.includes(p) ? 'chip-active' : ''}`}
+                    className={`chip ${draft.allergies.includes(p) ? 'chip-active' : ''}`}
                   >
-                    {profile.allergies.includes(p) && <Check size={11} />}
+                    {draft.allergies.includes(p) && <Check size={11} />}
                     {p}
                   </button>
                 ))}
@@ -292,7 +351,7 @@ export default function Profile() {
                   <button
                     key={n}
                     onClick={() => set({ mealsPerDay: n })}
-                    className={`chip ${profile.mealsPerDay === n ? 'chip-active' : ''}`}
+                    className={`chip ${draft.mealsPerDay === n ? 'chip-active' : ''}`}
                   >
                     {n} 餐
                   </button>
@@ -302,15 +361,14 @@ export default function Profile() {
           </Section>
         </div>
 
-        {/* 右栏 */}
+        {/* 右栏：实时预览 */}
         <div className="space-y-4">
-          {/* 计算结果 */}
           <div className="relative overflow-hidden rounded-[1.75rem] bg-ink-900 p-5 text-white shadow-soft sm:p-6">
             <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-lime-400/15 blur-3xl" />
             <div className="flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold">你的营养目标</h2>
+              <h2 className="text-[14px] font-semibold">营养目标预览</h2>
               <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9.5px] text-white/50">
-                {complete ? '自动计算' : '等待填写'}
+                {complete ? '保存后生效' : '等待填写'}
               </span>
             </div>
 
@@ -351,19 +409,19 @@ export default function Profile() {
               <div className="text-right">
                 <p className="text-[10px] text-white/45">目标体重</p>
                 <p className="num text-[15px] font-semibold">
-                  {profile.targetWeight || profile.weight || '—'} {(profile.targetWeight || profile.weight) > 0 && <span className="text-[9px] font-normal text-white/40">kg</span>}
+                  {draft.targetWeight || draft.weight || '—'} {(draft.targetWeight || draft.weight) > 0 && <span className="text-[9px] font-normal text-white/40">kg</span>}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-white/45">餐次</p>
                 <p className="num text-[15px] font-semibold">
-                  {profile.mealsPerDay} <span className="text-[9px] font-normal text-white/40">餐/天</span>
+                  {draft.mealsPerDay} <span className="text-[9px] font-normal text-white/40">餐/天</span>
                 </p>
               </div>
             </div>
             <p className="mt-3 text-[9.5px] leading-relaxed text-white/35">
-              计算依据：Mifflin-St Jeor 方程 × 活动系数 {ACTIVITY_FACTORS[profile.activity]}，目标系数{' '}
-              {profile.goal === 'lose' ? '0.82' : profile.goal === 'gain' ? '1.12' : '1.0'}。
+              计算依据：Mifflin-St Jeor 方程 × 活动系数 {ACTIVITY_FACTORS[draft.activity]}，目标系数{' '}
+              {draft.goal === 'lose' ? '0.82' : draft.goal === 'gain' ? '1.12' : '1.0'}。
             </p>
           </div>
 

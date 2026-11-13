@@ -1,38 +1,59 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
   ChartLine,
+  ChevronDown,
   ClipboardList,
   LayoutDashboard,
   LogOut,
   MessageCircleMore,
   Sparkles,
   UserRound,
+  X,
 } from 'lucide-react'
 import { Logo, Toasts } from './ui'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { prettyDate, todayKey } from '../lib/nutrition'
 
-const NAV = [
+/** 核心主流程：记录 → 分析 → 答疑 */
+const PRIMARY_NAV = [
   { to: '/app', label: '今日概览', icon: LayoutDashboard, end: true },
-  { to: '/app/analyze', label: 'AI 营养分析', icon: Sparkles },
-  { to: '/app/coach', label: 'AI 营养师', icon: MessageCircleMore },
+  { to: '/app/analyze', label: '餐食分析', icon: Sparkles },
+  { to: '/app/coach', label: '营养问答', icon: MessageCircleMore },
+]
+
+/** 辅助功能：历史记录、报告、档案 */
+const SECONDARY_NAV = [
   { to: '/app/log', label: '饮食记录', icon: ClipboardList },
   { to: '/app/report', label: '营养报告', icon: ChartLine },
   { to: '/app/profile', label: '健康档案', icon: UserRound },
 ]
-
-const MOBILE_NAV = NAV.slice(0, 5)
 
 export default function AppShell() {
   const { profile } = useApp()
   const { isGuest } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const [auxOpen, setAuxOpen] = useState(false)
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false)
 
   function handleLogout() {
     navigate('/logout')
+  }
+
+  function goalLabel() {
+    return profile.goal === 'lose' ? '减脂塑形' : profile.goal === 'gain' ? '增肌增重' : '维持健康'
+  }
+
+  function navLinkClass() {
+    return ({ isActive }: { isActive: boolean }) =>
+      `group flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13.5px] font-medium transition-all ${
+        isActive
+          ? 'bg-ink-900 text-white shadow-soft'
+          : 'text-ink-600 hover:bg-ink-900/[.05] hover:text-ink-900'
+      }`
   }
 
   return (
@@ -43,29 +64,53 @@ export default function AppShell() {
           <Logo />
         </NavLink>
 
-        <nav className="mt-9 space-y-1">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `group flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13.5px] font-medium transition-all ${
-                  isActive
-                    ? 'bg-ink-900 text-white shadow-soft'
-                    : 'text-ink-600 hover:bg-ink-900/[.05] hover:text-ink-900'
-                }`
-              }
+        <nav className="mt-9 space-y-5">
+          {/* 核心流程 */}
+          <div>
+            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+              核心流程
+            </p>
+            <div className="space-y-1">
+              {PRIMARY_NAV.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass()}>
+                  {({ isActive }) => (
+                    <>
+                      <item.icon size={17} strokeWidth={isActive ? 2.2 : 1.9} />
+                      <span>{item.label}</span>
+                      {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-lime-400" />}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          {/* 辅助功能（可折叠） */}
+          <div>
+            <button
+              onClick={() => setAuxOpen((v) => !v)}
+              className="mb-2 flex w-full items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400 hover:text-ink-600"
             >
-              {({ isActive }) => (
-                <>
-                  <item.icon size={17} strokeWidth={isActive ? 2.2 : 1.9} />
-                  <span>{item.label}</span>
-                  {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-lime-400" />}
-                </>
-              )}
-            </NavLink>
-          ))}
+              <span>辅助功能</span>
+              <ChevronDown
+                size={13}
+                className={`transition-transform ${auxOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <div className={`space-y-1 overflow-hidden transition-all ${auxOpen ? 'max-h-72' : 'max-h-0'}`}>
+              {SECONDARY_NAV.map((item) => (
+                <NavLink key={item.to} to={item.to} className={navLinkClass()}>
+                  {({ isActive }) => (
+                    <>
+                      <item.icon size={17} strokeWidth={isActive ? 2.2 : 1.9} />
+                      <span>{item.label}</span>
+                      {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-lime-400" />}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         </nav>
 
         <div className="mt-auto space-y-3">
@@ -80,13 +125,7 @@ export default function AppShell() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-semibold text-ink-900">{profile.name}</p>
                 <p className="truncate text-[11px] text-ink-500">
-                  {isGuest
-                    ? '游客模式 · 数据仅存本机'
-                    : profile.goal === 'lose'
-                      ? '减脂塑形'
-                      : profile.goal === 'gain'
-                        ? '增肌增重'
-                        : '维持健康'}
+                  {isGuest ? '游客模式 · 数据仅存本机' : goalLabel()}
                 </p>
               </div>
               <ArrowUpRight size={14} className="text-ink-500" />
@@ -144,10 +183,10 @@ export default function AppShell() {
         </div>
       </main>
 
-      {/* 移动端底部导航 */}
+      {/* 移动端底部导航：3 个核心 + 更多 */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-clay/80 bg-paper/92 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
-        <div className="grid grid-cols-5">
-          {MOBILE_NAV.map((item) => (
+        <div className="grid grid-cols-4">
+          {PRIMARY_NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -167,13 +206,71 @@ export default function AppShell() {
                   >
                     <item.icon size={17} strokeWidth={isActive ? 2.2 : 1.8} />
                   </span>
-                  {item.label.replace('AI ', '')}
+                  {item.label}
                 </>
               )}
             </NavLink>
           ))}
+          <button
+            onClick={() => setMoreSheetOpen(true)}
+            className="flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-ink-500 transition-colors"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-xl text-ink-500">
+              <ClipboardList size={17} strokeWidth={1.8} />
+            </span>
+            更多
+          </button>
         </div>
       </nav>
+
+      {/* 移动端「更多」抽屉 */}
+      {moreSheetOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm lg:hidden"
+          onClick={() => setMoreSheetOpen(false)}
+        >
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-[1.75rem] bg-paper pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-lift"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-clay" />
+            <div className="px-4">
+              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+                辅助功能
+              </p>
+              <div className="space-y-1">
+                {SECONDARY_NAV.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMoreSheetOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-2xl px-3 py-3 text-[13.5px] font-medium ${
+                        isActive ? 'bg-ink-900 text-white' : 'text-ink-700 hover:bg-cream'
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <item.icon size={17} strokeWidth={isActive ? 2.2 : 1.9} />
+                        <span>{item.label}</span>
+                        {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-lime-400" />}
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+              <button
+                onClick={() => setMoreSheetOpen(false)}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-clay py-2.5 text-[12px] font-medium text-ink-500"
+              >
+                <X size={14} />
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toasts />
     </div>

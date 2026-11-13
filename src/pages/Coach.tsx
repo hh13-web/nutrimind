@@ -182,7 +182,7 @@ export default function Coach() {
               <Bot size={15} />
             </span>
             <div>
-              <h1 className="text-[14px] font-semibold text-ink-900">AI 营养师</h1>
+              <h1 className="text-[14px] font-semibold text-ink-900">营养问答</h1>
               <p className="flex items-center gap-1.5 text-[10px] text-ink-500">
                 <span className="h-1.5 w-1.5 rounded-full bg-lime-500" />
                 {aiReady ? '在线 · 已读取你的健康档案' : '本地模式 · 已读取你的健康档案'}

@@ -269,27 +269,18 @@ export async function analyzeMeal(
   profile: Profile,
   mealType: MealType,
   aiStatus: ServerAIStatus,
-  image?: string,
 ): Promise<AnalysisResult> {
   const local = analyzeMealLocal(input || '一餐', profile, mealType)
   if (!aiStatus.configured) return local
 
   const prompt = `用餐时段：${MEAL_LABELS[mealType]}
 用户画像：${profile.gender === 'female' ? '女性' : '男性'}，${profile.age}岁，${profile.height}cm，${profile.weight}kg，目标：${profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}，饮食偏好：${profile.dietPreferences.join('、') || '无'}，过敏：${profile.allergies.join('、') || '无'}
-餐食描述：${input || '（见图片）'}`
+餐食描述：${input || '（无）'}`
 
   try {
     const raw = await callChat([
       { role: 'system', content: ANALYZE_SYSTEM },
-      {
-        role: 'user',
-        content: image
-          ? [
-              { type: 'text', text: `${prompt}\n请结合图片识别餐食内容与份量。` },
-              { type: 'image_url', image_url: { url: image } },
-            ]
-          : prompt,
-      },
+      { role: 'user', content: prompt },
     ])
     const json = extractJSON(raw)
     const rawItems = Array.isArray(json.items) ? json.items : []

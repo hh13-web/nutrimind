@@ -1,16 +1,14 @@
-import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
   ArrowRight,
   Brain,
   Check,
-  ImagePlus,
   Loader2,
   ScanLine,
   Sparkles,
   Utensils,
-  X,
   Zap,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -42,6 +40,13 @@ const EXAMPLES = [
 
 const STEPS = ['理解自然语言描述', '匹配食物营养知识库', '计算热量与七大营养素', '生成个性化营养处方']
 
+// 页面顶部的三步流程
+const FLOW_STEPS = [
+  { n: 1, title: '描述餐食', desc: '用一句话写下你吃了什么' },
+  { n: 2, title: 'AI 营养分析', desc: '拆解热量与营养素并评分' },
+  { n: 3, title: '加入今日饮食', desc: '记录后在概览中持续追踪' },
+]
+
 function guessMealType(): MealType {
   const h = new Date().getHours()
   if (h < 10) return 'breakfast'
@@ -54,14 +59,16 @@ export default function Analyze() {
   const { profile, aiStatus, targets, todayNutrition, addMeal, notify } = useApp()
   const { requireAuth } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const initialMeal = (searchParams.get('meal') as MealType) || guessMealType()
   const [input, setInput] = useState('')
-  const [mealType, setMealType] = useState<MealType>(guessMealType)
-  const [image, setImage] = useState<string | null>(null)
+  const [mealType, setMealType] = useState<MealType>(
+    ['breakfast', 'lunch', 'dinner', 'snack'].includes(initialMeal) ? initialMeal : guessMealType(),
+  )
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(0)
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [added, setAdded] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
   const aiReady = aiStatus.configured
 
   const remaining = Math.max(0, Math.round(targets.calories - todayNutrition.calories))
@@ -74,11 +81,11 @@ export default function Analyze() {
   const liveScore = useMemo(() => (result ? scoreMeal(totals, targets, result.mealType) : 0), [result, totals, targets])
 
   async function run() {
-    if (!input.trim() && !image) {
-      notify('请描述你吃了什么，或上传一张餐食照片', 'error')
+    if (!input.trim()) {
+      notify('请描述你吃了什么', 'error')
       return
     }
-    if (!requireAuth('AI 营养分析')) return
+    if (!requireAuth('餐食分析')) return
     if (!isProfileComplete(profile)) {
       notify('请先填写有效的年龄、身高和当前体重，再进行个性化分析', 'info')
       navigate('/app/profile')
@@ -90,11 +97,11 @@ export default function Analyze() {
     setAdded(false)
     const timer = window.setInterval(() => setStep((s) => Math.min(3, s + 1)), 900)
     try {
-      const res = await analyzeMeal(input.trim(), profile, mealType, aiStatus, image ?? undefined)
+      const res = await analyzeMeal(input.trim(), profile, mealType, aiStatus)
       setResult(res)
       setStep(4)
       notify(
-        res.engine === 'llm' ? 'AI 已完成营养分析' : '本地营养引擎已完成分析',
+        res.engine === 'llm' ? 'AI 已完成营养分析，记得加入今日饮食' : '本地营养引擎已完成分析',
         'success',
       )
     } catch (e) {
@@ -106,21 +113,6 @@ export default function Analyze() {
         setStep(0)
       }, 260)
     }
-  }
-
-  function handleFile(file?: File | null) {
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      notify('请选择图片文件', 'error')
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      notify('图片请不要超过 5MB', 'error')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => setImage(String(reader.result))
-    reader.readAsDataURL(file)
   }
 
   function updateGrams(index: number, grams: number) {
@@ -151,19 +143,40 @@ export default function Analyze() {
       engine: result.engine,
     })
     setAdded(true)
-    notify(`已加入今日${MEAL_LABELS[result.mealType]}`, 'success')
+    notify(`已加入今日${MEAL_LABELS[result.mealType]}，可在概览中查看`, 'success')
   }
 
   return (
     <div className="space-y-5">
+      {/* 三步流程 */}
+      <div className="flex items-center gap-2 rounded-2xl border border-clay bg-paper p-3 shadow-soft sm:gap-3 sm:p-4">
+        {FLOW_STEPS.map((s, i) => (
+          <div key={s.n} className="flex flex-1 items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink-900 text-[11px] font-semibold text-lime-400">
+                {s.n}
+              </span>
+              <div className="hidden sm:block">
+                <p className="text-[12px] font-semibold text-ink-900">{s.title}</p>
+                <p className="text-[10px] text-ink-500">{s.desc}</p>
+              </div>
+              <p className="text-[12px] font-semibold text-ink-900 sm:hidden">{s.title}</p>
+            </div>
+            {i < FLOW_STEPS.length - 1 && (
+              <ArrowRight size={14} className="shrink-0 text-ink-400" />
+            )}
+          </div>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow">AI Food Analysis</p>
+          <p className="eyebrow">Meal analysis</p>
           <h1 className="mt-1.5 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.02em] text-ink-900">
-            AI 营养分析
+            餐食分析
           </h1>
           <p className="mt-1.5 text-[13px] text-ink-600">
-            用一句话描述你吃了什么，AI 会完成识别、拆解与处方。
+            描述一餐吃了什么，AI 会拆解营养并给出评分，确认后加入今日饮食记录。
           </p>
         </div>
         <span
@@ -217,34 +230,7 @@ export default function Analyze() {
           </span>
         </div>
 
-        {image && (
-          <div className="mt-3 flex items-center gap-3 rounded-2xl border border-clay bg-cream/60 p-2.5">
-            <img src={image} alt="餐食预览" className="h-14 w-14 rounded-xl object-cover" />
-            <div className="flex-1">
-              <p className="text-[12px] font-semibold text-ink-900">餐食图片已附上</p>
-              <p className="text-[10.5px] text-ink-500">
-                {aiReady ? '将随描述一起发送给多模态模型识别' : '本地引擎无法读图，请在描述中补充食物内容'}
-              </p>
-            </div>
-            <button onClick={() => setImage(null)} className="rounded-full p-1.5 text-ink-500 hover:bg-clay/60">
-              <X size={15} />
-            </button>
-          </div>
-        )}
-
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => handleFile(e.target.files?.[0])}
-          />
-          <button onClick={() => fileRef.current?.click()} className="btn-ghost btn-sm">
-            <ImagePlus size={14} />
-            上传餐食照片
-          </button>
-          <div className="hidden h-5 w-px bg-clay sm:block" />
           <div className="flex flex-1 flex-wrap gap-1.5">
             {EXAMPLES.slice(0, 3).map((ex) => (
               <button
@@ -465,21 +451,27 @@ export default function Analyze() {
                   </div>
                 ))}
               </div>
-              <div className="mt-5 flex items-center gap-2">
-                <button onClick={saveMeal} disabled={added} className="btn-primary flex-1 px-4 py-2.5 text-[12.5px]">
-                  {added ? <Check size={14} /> : <Sparkles size={14} />}
-                  {added ? '已加入今日饮食' : `加入今日${MEAL_LABELS[result.mealType]}`}
-                </button>
-                {added ? (
+
+              {/* 流程收尾：加入今日饮食 */}
+              <div className="mt-5 rounded-2xl border border-lime-500/30 bg-lime-400/10 p-3">
+                <p className="text-[11px] font-semibold text-ink-800">
+                  {added ? '已加入今日饮食 ✓' : '第 3 步：加入今日饮食'}
+                </p>
+                <p className="mt-0.5 text-[10px] text-ink-600">
+                  {added
+                    ? '这一餐已记录，今日总摄入与概览已更新。'
+                    : '确认营养数据后，把这一餐加入今日记录，方便持续追踪。'}
+                </p>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button onClick={saveMeal} disabled={added} className="btn-primary flex-1 px-4 py-2.5 text-[12.5px] disabled:opacity-60">
+                    {added ? <Check size={14} /> : <Sparkles size={14} />}
+                    {added ? '已加入今日饮食' : `加入今日${MEAL_LABELS[result.mealType]}`}
+                  </button>
                   <Link to="/app" className="btn-ghost px-4 py-2.5 text-[12.5px]">
                     查看概览
                     <ArrowRight size={14} />
                   </Link>
-                ) : (
-                  <Link to="/app/coach" className="btn-ghost px-4 py-2.5 text-[12.5px]">
-                    问营养师
-                  </Link>
-                )}
+                </div>
               </div>
             </div>
           </div>

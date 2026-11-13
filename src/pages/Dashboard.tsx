@@ -133,11 +133,11 @@ export default function Dashboard() {
         <div className="flex items-center gap-2">
           <Link to="/app/analyze" className="btn-primary px-4 py-2.5 text-[13px]">
             <Sparkles size={15} />
-            AI 分析一餐
+            记录并分析一餐
           </Link>
           <Link to="/app/log" className="btn-ghost hidden px-4 py-2.5 text-[13px] sm:inline-flex">
             <Plus size={15} />
-            添加记录
+            全部记录
           </Link>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default function Dashboard() {
           >
             <span className="flex items-center gap-2">
               <MessageCircleMore size={15} />
-              问问 AI 营养师
+              营养问答
             </span>
             <ArrowRight size={14} />
           </Link>
@@ -279,7 +279,7 @@ export default function Dashboard() {
                     </div>
                     {items.length === 0 ? (
                       <Link
-                        to="/app/analyze"
+                        to={`/app/analyze?meal=${g.type}`}
                         className="mt-1 inline-flex items-center gap-1 text-[11.5px] text-ink-500 hover:text-ink-900"
                       >
                         <Plus size={12} />
@@ -389,8 +389,8 @@ export default function Dashboard() {
       {/* 快捷入口 */}
       <div className="grid gap-3 sm:grid-cols-3">
         {[
-          { to: '/app/analyze', icon: Sparkles, title: 'AI 营养分析', desc: '一句话拆解一餐' },
-          { to: '/app/coach', icon: MessageCircleMore, title: 'AI 营养师', desc: '随时问，随时答' },
+          { to: '/app/analyze', icon: Sparkles, title: '餐食分析', desc: '记录一餐并拆解营养' },
+          { to: '/app/coach', icon: MessageCircleMore, title: '营养问答', desc: '随时向 AI 营养师提问' },
           { to: '/app/log', icon: UtensilsCrossed, title: '饮食记录', desc: '完整记录每一天' },
         ].map((q) => (
           <Link

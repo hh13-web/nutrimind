@@ -10,6 +10,7 @@ import Log from './pages/Log'
 import Report from './pages/Report'
 import Profile from './pages/Profile'
 import LoginPrompt from './components/LoginPrompt'
+import Onboarding from './components/Onboarding'
 import { useAuth } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
 import { Logo } from './components/ui'
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <LoginPrompt />
+      <Onboarding />
     </>
   )
 }
