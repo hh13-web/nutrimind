@@ -244,8 +244,9 @@ export default function Report() {
           <div className="mt-5 rounded-xl bg-cream/70 p-3">
             <p className="flex items-center gap-1.5 text-[10.5px] leading-relaxed text-ink-600">
               <Leaf size={12} className="shrink-0" />
-              达成度基于你 {profile.weight}kg 体重与「
-              {profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}」目标动态计算。
+              {profile.weight
+                ? `达成度基于你 ${profile.weight}kg 体重与「${profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}」目标动态计算。`
+                : '填写健康档案后，将基于你的身体数据与目标动态计算达成度。'}
             </p>
           </div>
         </div>

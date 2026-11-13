@@ -82,8 +82,13 @@ export function sumMeals(meals: Meal[]): Nutrition {
 
 export const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
+export function isProfileComplete(p: Pick<Profile, 'weight' | 'height' | 'age'>): boolean {
+  return p.age >= 12 && p.age <= 90 && p.height >= 130 && p.height <= 220 && p.weight >= 30 && p.weight <= 200
+}
+
 /** Mifflin-St Jeor 基础代谢 */
 export function calcBMR(p: Pick<Profile, 'gender' | 'weight' | 'height' | 'age'>): number {
+  if (!isProfileComplete(p)) return 0
   const base = 10 * p.weight + 6.25 * p.height - 5 * p.age
   return Math.round(p.gender === 'male' ? base + 5 : base - 161)
 }
@@ -94,6 +99,9 @@ export function calcTDEE(p: Profile): number {
 
 export function calcTargets(p: Profile): MacroTargets {
   const tdee = calcTDEE(p)
+  if (!isProfileComplete(p)) {
+    return { calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 25, sodium: 2000, sugar: 0 }
+  }
   let calories = tdee
   if (p.goal === 'lose') calories = Math.max(Math.round(tdee * 0.82), calcBMR(p))
   if (p.goal === 'gain') calories = Math.round(tdee * 1.12)
@@ -117,6 +125,7 @@ export function calcTargets(p: Profile): MacroTargets {
 }
 
 export function calcBMI(p: Pick<Profile, 'weight' | 'height'>): number {
+  if (p.height < 130 || p.weight < 30) return 0
   return Math.round((p.weight / Math.pow(p.height / 100, 2)) * 10) / 10
 }
 

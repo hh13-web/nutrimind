@@ -1,14 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage, Meal, Profile } from '../types'
 import {
-  buildDefaultProfile,
-  buildSeedMeals,
   buildWelcomeMessage,
-  isSeeded,
   loadChat,
   loadMeals,
   loadProfile,
-  markSeeded,
   saveChat,
   saveMeals,
   saveProfile,
@@ -40,24 +36,13 @@ interface AppContextValue {
   toasts: Toast[]
   notify: (message: string, tone?: Toast['tone']) => void
   dismissToast: (id: number) => void
-  resetDemoData: () => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfileState] = useState<Profile>(() => loadProfile())
-  const [meals, setMeals] = useState<Meal[]>(() => {
-    const stored = loadMeals()
-    if (stored) return stored
-    if (!isSeeded()) {
-      const seeded = buildSeedMeals()
-      markSeeded()
-      saveMeals(seeded)
-      return seeded
-    }
-    return []
-  })
+  const [meals, setMeals] = useState<Meal[]>(() => loadMeals() ?? [])
   const [chat, setChat] = useState<ChatMessage[]>(() => {
     const stored = loadChat()
     if (stored) return stored
@@ -149,23 +134,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  const resetDemoData = useCallback(() => {
-    const fresh = buildDefaultProfile()
-    saveProfile(fresh)
-    setProfileState(fresh)
-    const seeded = buildSeedMeals()
-    setMeals(seeded)
-    setChat([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: buildWelcomeMessage(),
-        createdAt: Date.now(),
-        engine: 'local',
-      },
-    ])
-    notify('示例数据已重置', 'info')
-  }, [notify])
 
   const todayMeals = useMemo(() => meals.filter((m) => m.date === todayKey()), [meals])
   const todayNutrition = useMemo(() => sumMeals(todayMeals), [todayMeals])
@@ -189,7 +157,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toasts,
     notify,
     dismissToast,
-    resetDemoData,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

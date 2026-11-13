@@ -16,6 +16,7 @@ import {
   bmiLabel,
   calcBMI,
   calcTDEE,
+  isProfileComplete,
   lastNDays,
   prettyDate,
   pct,
@@ -37,6 +38,7 @@ function greeting(): string {
 export default function Dashboard() {
   const { profile, meals, todayMeals, todayNutrition, targets, removeMeal, notify } = useApp()
   const today = todayKey()
+  const complete = isProfileComplete(profile)
   const bmi = calcBMI(profile)
   const bmiInfo = bmiLabel(bmi)
   const tdee = calcTDEE(profile)
@@ -48,7 +50,9 @@ export default function Dashboard() {
   const left = Math.max(0, Math.round(targets.calories - todayNutrition.calories))
 
   const insights: { text: string; tone: 'warn' | 'good' | 'info' }[] = []
-  if (todayMeals.length === 0) {
+  if (!complete) {
+    insights.push({ text: '请先在健康档案中填写年龄、身高和当前体重，AI 才能按你的身体数据计算营养目标。', tone: 'info' })
+  } else if (todayMeals.length === 0) {
     insights.push({ text: '今天还没有记录。用一句话描述你吃过的食物，我会立刻拆解营养结构。', tone: 'info' })
   } else {
     const proteinGap = Math.round(targets.protein - todayNutrition.protein)
@@ -151,7 +155,7 @@ export default function Dashboard() {
               <h2 className="mt-1.5 text-[17px] font-semibold">今日营养总览</h2>
             </div>
             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-white/60">
-              目标 {targets.calories} kcal
+              {complete ? `目标 ${targets.calories} kcal` : '完善档案后生成目标'}
             </span>
           </div>
 
@@ -337,38 +341,46 @@ export default function Dashboard() {
               <div>
                 <p className="text-[10.5px] text-ink-500">BMI</p>
                 <p className="num mt-0.5 text-lg font-semibold text-ink-900">
-                  {bmi}
-                  <span className={`ml-1.5 text-[11px] font-medium ${bmiInfo.tone}`}>{bmiInfo.label}</span>
+                  {complete ? bmi : '—'}
+                  <span className={`ml-1.5 text-[11px] font-medium ${bmiInfo.tone}`}>{complete ? bmiInfo.label : '待填写'}</span>
                 </p>
               </div>
               <div>
                 <p className="text-[10.5px] text-ink-500">每日消耗</p>
                 <p className="num mt-0.5 text-lg font-semibold text-ink-900">
-                  {tdee}
-                  <span className="ml-1 text-[10px] font-normal text-ink-500">kcal</span>
+                  {complete ? tdee : '—'}
+                  {complete && <span className="ml-1 text-[10px] font-normal text-ink-500">kcal</span>}
                 </p>
               </div>
             </div>
             <div className="mt-4">
-              <div className="flex items-center justify-between rounded-xl bg-cream/70 px-3 py-2.5">
-                <div>
-                  <p className="text-[10px] text-ink-500">距目标体重</p>
-                  <p className="num text-[14px] font-semibold text-ink-900">
-                    {(profile.weight - profile.targetWeight) > 0
-                      ? `${(profile.weight - profile.targetWeight).toFixed(1)} kg`
-                      : '已达成'}
+              {complete ? (
+                <>
+                  <div className="flex items-center justify-between rounded-xl bg-cream/70 px-3 py-2.5">
+                    <div>
+                      <p className="text-[10px] text-ink-500">距目标体重</p>
+                      <p className="num text-[14px] font-semibold text-ink-900">
+                        {(profile.weight - (profile.targetWeight || profile.weight)) > 0
+                          ? `${(profile.weight - (profile.targetWeight || profile.weight)).toFixed(1)} kg`
+                          : '已达成'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-ink-500">预计周期</p>
+                      <p className="num text-[14px] font-semibold text-ink-900">
+                        约 {Math.max(1, Math.round(((profile.weight - (profile.targetWeight || profile.weight)) * 7700) / ((tdee - targets.calories) || 300) / 7))} 周
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-relaxed text-ink-500">
+                    按每日约 {Math.max(0, tdee - targets.calories)} kcal 的温和缺口估算，保持记录即可稳定推进。
                   </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-ink-500">预计周期</p>
-                  <p className="num text-[14px] font-semibold text-ink-900">
-                    约 {Math.max(1, Math.round(((profile.weight - profile.targetWeight) * 7700) / ((tdee - targets.calories) || 300) / 7))} 周
-                  </p>
-                </div>
-              </div>
-              <p className="mt-2 text-[10px] leading-relaxed text-ink-500">
-                按每日约 {Math.max(0, tdee - targets.calories)} kcal 的温和缺口估算，保持记录即可稳定推进。
-              </p>
+                </>
+              ) : (
+                <Link to="/app/profile" className="block rounded-xl bg-cream/70 px-3 py-3 text-[11px] font-medium text-ink-700 hover:text-ink-900">
+                  填写身体数据，生成我的营养目标 →
+                </Link>
+              )}
             </div>
           </div>
         </div>

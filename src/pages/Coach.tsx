@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ArrowUp,
   Bot,
@@ -13,7 +14,7 @@ import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { coachReply } from '../lib/ai'
 import { MarkdownLite } from '../components/ui'
-import { pct } from '../lib/nutrition'
+import { isProfileComplete, pct } from '../lib/nutrition'
 import type { ChatMessage } from '../types'
 
 const QUICK_QUESTIONS = [
@@ -39,6 +40,7 @@ export default function Coach() {
     notify,
   } = useApp()
   const { requireAuth } = useAuth()
+  const navigate = useNavigate()
   const [draft, setDraft] = useState('')
   const [pending, setPending] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
@@ -55,6 +57,11 @@ export default function Coach() {
     const question = (text ?? draft).trim()
     if (!question || pending) return
     if (!requireAuth('AI 营养师')) return
+    if (!isProfileComplete(profile)) {
+      notify('请先填写有效的年龄、身高和当前体重，AI 才能结合你的身体数据回答', 'info')
+      navigate('/app/profile')
+      return
+    }
     setDraft('')
     setPending(true)
 
@@ -150,8 +157,8 @@ export default function Coach() {
             ))}
           </div>
           <div className="mt-4 flex flex-wrap gap-1.5">
-            <span className="tag">{profile.age} 岁</span>
-            <span className="tag">{profile.weight} kg</span>
+            <span className="tag">{profile.age ? `${profile.age} 岁` : '年龄待填写'}</span>
+            <span className="tag">{profile.weight ? `${profile.weight} kg` : '体重待填写'}</span>
             <span className="tag">
               {profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}
             </span>

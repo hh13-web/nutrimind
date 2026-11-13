@@ -21,6 +21,7 @@ import {
   roundNutrition,
   scaleNutrition,
   scoreMeal,
+  searchFoods,
   sumMeals,
   zeroNutrition,
   suggestMealPlan,
@@ -260,7 +261,8 @@ const ANALYZE_SYSTEM = `你是一位严谨的注册营养师（RD），擅长基
 1. 按常见中式份量估算克数；复合菜请拆分为主要食材。
 2. 营养数据以每餐实际摄入量为准，不是每100g。
 3. 语气专业、具体、可执行，不做疾病诊断。
-4. 只输出 JSON。`
+4. 点评和建议必须结合用户填写的年龄、身高、体重、身体目标与每日营养目标，不得使用通用模板代替个体分析。
+5. 只输出 JSON。`
 
 export async function analyzeMeal(
   input: string,
@@ -362,7 +364,8 @@ const COACH_SYSTEM = `你是「知膳」AI 营养师，一位温和、专业、�
 3. 结合给出的今日摄入数据做计算，明确指出还差多少。
 4. 不进行疾病诊断或推荐药物；涉及疾病、孕期、用药时提示咨询医生。
 5. 可以适度使用 Markdown（加粗、无序列表），不要输出代码块。
-6. 用户点名餐次时，必须只回答该餐次：提到早餐/早上/早晨/早饭时只给早餐方案，午餐/中午只给午餐，晚餐/晚上/夜宵只给晚餐或夜宵，绝不能替换成其他餐次。若用户未点名餐次，则按当前时间推断最合理的一餐。`
+6. 用户点名餐次时，必须只回答该餐次：提到早餐/早上/早晨/早饭时只给早餐方案，午餐/中午只给午餐，晚餐/晚上/夜宵只给晚餐或夜宵，绝不能替换成其他餐次。若用户未点名餐次，则按当前时间推断最合理的一餐。
+7. 必须结合用户本人填写的年龄、身高、体重、活动量和目标计算需求并给出建议，不得假设或编造身体数据。`
 
 export interface CoachContext {
   profile: Profile
@@ -473,6 +476,41 @@ export function localCoachReply(question: string, ctx: CoachContext): string {
 - **不要自行停药或替代治疗**，饮食调整需与主治医生同步。
 
 如果你愿意，也可以告诉我具体的饮食困扰，我帮你把餐单做得更友好。`
+  }
+
+  // 任意食物查询：命中内置食物库时，按用户档案给出每 100g 数据与份量建议
+  const cleanedQuestion = question.replace(/[？?！!，,。.、；;：:\s]/g, '')
+  const asksNutrition = /(热量|卡路里|多少卡|碳水|脂肪|蛋白|纤维|钠|糖|升糖|gi|嘌呤|胆固醇|能吃|可以吃|适合|会不会胖|长胖|营养)/i.test(q)
+  if ((asksNutrition || cleanedQuestion.length <= 6) && cleanedQuestion) {
+    const hits = searchFoods(cleanedQuestion, 2)
+    if (hits.length > 0) {
+      const food = hits[0]
+      const n = food.per100g
+      const unit = food.units?.[0]
+      const grams = unit?.grams ?? 100
+      const portion = scaleNutrition(n, grams / 100)
+      const share = targets.calories > 0 ? Math.round((portion.calories / targets.calories) * 100) : 0
+      const notes: string[] = []
+      if (n.protein >= 12) notes.push('蛋白质密度较高，适合用来补齐每餐蛋白')
+      if (n.fat >= 15) notes.push('脂肪偏高，注意烹饪用油和份量')
+      if (n.carbs >= 20 && n.fiber < 2) notes.push('以精制碳水为主，建议搭配蔬菜或换成全谷物')
+      if (n.fiber >= 4) notes.push('纤维含量不错，有助饱腹和血糖平稳')
+      if (n.sodium >= 500) notes.push('钠偏高，同一天其余餐次要清淡')
+      if (notes.length === 0) notes.push('营养密度适中，控制份量就不会偏离目标')
+      const others = hits.slice(1).map(
+        (f) =>
+          `- **${f.name}**：每 100g ${Math.round(f.per100g.calories)} kcal，蛋白质 ${f.per100g.protein.toFixed(1)}g`,
+      )
+      return `**${food.emoji} ${food.name}**（每 100g）
+
+- 热量 **${Math.round(n.calories)} kcal**
+- 蛋白质 **${n.protein.toFixed(1)}g** · 脂肪 ${n.fat.toFixed(1)}g · 碳水 ${n.carbs.toFixed(1)}g
+- 膳食纤维 ${n.fiber.toFixed(1)}g · 钠 ${Math.round(n.sodium)}mg
+
+**适不适合你：** ${notes.join('；')}。
+
+**份量建议：** 按你每天 ${targets.calories} kcal 的目标，一次 **${unit ? `${unit.label}（约 ${grams}g）` : `${grams}g`}** 约 ${Math.round(portion.calories)} kcal，占全天目标的 ${share}%。${calLeft > 0 ? `今日还剩 ${calLeft} kcal，可以安排。` : '今日热量已接近目标，建议减半份量或放到明天。'}${others.length ? `\n\n**同类对比：**\n${others.join('\n')}` : ''}`
+    }
   }
 
   const wantsSatiety = /(不容易饿|抗饿|饱腹|饿)/.test(q)

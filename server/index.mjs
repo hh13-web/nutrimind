@@ -24,7 +24,12 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
-const STATIC_DIR = process.env.STATIC_DIR ? path.resolve(process.env.STATIC_DIR) : path.join(ROOT, 'dist')
+const DIST_DIR = path.join(ROOT, 'dist')
+const STATIC_DIR = process.env.STATIC_DIR
+  ? path.resolve(process.env.STATIC_DIR)
+  : existsSync(path.join(DIST_DIR, 'index.html'))
+    ? DIST_DIR
+    : ROOT
 
 /** 数据目录：优先环境变量；项目目录不可写时（如 Serverless 只读挂载）回退到系统临时目录 */
 function resolveDataDir() {
@@ -41,10 +46,40 @@ function resolveDataDir() {
 const DATA_DIR = resolveDataDir()
 const USERS_FILE = path.join(DATA_DIR, 'users.json')
 
+/**
+ * 读取 AI 配置文件，供无法设置环境变量的部署环境使用。
+ * 查找顺序：AI_CONFIG_FILE → 项目根 ai-config.json → 数据目录 ai-config.json。
+ */
+function loadAIConfig() {
+  const candidates = [
+    process.env.AI_CONFIG_FILE,
+    path.join(ROOT, 'ai-config.json'),
+    path.join(DATA_DIR, 'ai-config.json'),
+  ]
+  for (const file of candidates) {
+    if (!file) continue
+    try {
+      const raw = JSON.parse(readFileSync(file, 'utf8'))
+      return {
+        baseUrl: String(raw.baseUrl || raw.base_url || '').trim(),
+        apiKey: String(raw.apiKey || raw.api_key || '').trim(),
+        model: String(raw.model || '').trim(),
+      }
+    } catch {
+      /* 文件不存在或格式错误时继续尝试下一个 */
+    }
+  }
+  return { baseUrl: '', apiKey: '', model: '' }
+}
+
+const FILE_AI = loadAIConfig()
+
 const PORT = Number(process.env.PORT) || 8000
-const AI_BASE_URL = (process.env.AI_BASE_URL || '').trim().replace(/\/+$/, '')
-const AI_API_KEY = (process.env.AI_API_KEY || '').trim()
-const AI_MODEL = (process.env.AI_MODEL || '').trim()
+const AI_BASE_URL = (process.env.AI_BASE_URL || FILE_AI.baseUrl || '')
+  .trim()
+  .replace(/\/+$/, '')
+const AI_API_KEY = (process.env.AI_API_KEY || FILE_AI.apiKey || '').trim()
+const AI_MODEL = (process.env.AI_MODEL || FILE_AI.model || '').trim()
 const AUTH_SECRET = process.env.AUTH_SECRET || 'nutrimind-dev-secret-change-me'
 const AI_READY = Boolean(AI_BASE_URL && AI_API_KEY && AI_MODEL)
 const TOKEN_TTL = 7 * 24 * 3600 * 1000

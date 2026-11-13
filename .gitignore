@@ -6,7 +6,11 @@ dist-ssr
 .env
 .env.*
 !.env.example
+ai-config.json
 .DS_Store
 *.log
 .uploads
 data/
+*.zip
+.screenshots
+docs/

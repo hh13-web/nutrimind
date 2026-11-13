@@ -1,14 +1,7 @@
-import { useState } from 'react'
 import {
   Activity,
   Check,
-  Cpu,
-  Database,
-  Loader2,
-  RefreshCw,
-  RotateCcw,
   Ruler,
-  Server,
   Sparkles,
   UserRound,
   Weight,
@@ -20,6 +13,7 @@ import {
   calcBMI,
   calcBMR,
   calcTDEE,
+  isProfileComplete,
 } from '../lib/nutrition'
 import type { ActivityLevel, Goal, Profile as ProfileType } from '../types'
 
@@ -86,9 +80,8 @@ function Field({
 }
 
 export default function Profile() {
-  const { profile, updateProfile, aiStatus, refreshAIStatus, targets, resetDemoData, notify } = useApp()
-  const [refreshing, setRefreshing] = useState(false)
-
+  const { profile, updateProfile, targets } = useApp()
+  const complete = isProfileComplete(profile)
   const bmi = calcBMI(profile)
   const bmiInfo = bmiLabel(bmi)
   const bmr = calcBMR(profile)
@@ -101,15 +94,6 @@ export default function Profile() {
     set({ [key]: list.includes(value) ? list.filter((x) => x !== value) : [...list, value] } as Partial<ProfileType>)
   }
 
-  async function checkAI() {
-    setRefreshing(true)
-    const status = await refreshAIStatus()
-    setRefreshing(false)
-    notify(
-      status.configured ? `已连接服务端 AI 引擎 · ${status.model}` : '服务端未配置 AI 引擎，当前使用本地营养引擎',
-      'info',
-    )
-  }
 
   return (
     <div className="space-y-5">
@@ -126,7 +110,7 @@ export default function Profile() {
       <div className="flex items-start gap-2.5 rounded-2xl border border-lime-500/25 bg-lime-400/15 px-4 py-3">
         <Sparkles size={14} className="mt-0.5 shrink-0 text-ink-800" />
         <p className="text-[11.5px] leading-relaxed text-ink-800">
-          当前为可直接体验的示例档案。修改任意字段后，每日目标、餐食评分与 AI 建议都会同步更新。
+          请按真实情况填写年龄、身高和体重。AI 营养分析与营养师会结合这些数据、活动量和目标生成建议，修改后自动保存。
         </p>
       </div>
 
@@ -162,55 +146,60 @@ export default function Profile() {
                   ))}
                 </div>
               </Field>
-              <Field label="年龄">
+              <Field label="年龄（必填）" hint="12–90 岁">
                 <input
                   type="number"
                   className="input"
-                  value={profile.age}
+                  value={profile.age || ''}
                   min={12}
                   max={90}
-                  onChange={(e) => set({ age: Math.max(12, Math.min(90, Number(e.target.value) || 18)) })}
+                  required
+                  placeholder="请输入年龄"
+                  onChange={(e) => set({ age: Number(e.target.value) || 0 })}
                 />
               </Field>
-              <Field label="身高">
+              <Field label="身高（必填）" hint="单位：cm">
                 <div className="relative">
                   <input
                     type="number"
                     className="input pr-10"
-                    value={profile.height}
+                    value={profile.height || ''}
                     min={130}
                     max={220}
-                    onChange={(e) => set({ height: Math.max(130, Math.min(220, Number(e.target.value) || 165)) })}
+                    required
+                    placeholder="例如 165"
+                    onChange={(e) => set({ height: Number(e.target.value) || 0 })}
                   />
                   <Ruler size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                 </div>
               </Field>
-              <Field label="当前体重">
+              <Field label="当前体重（必填）" hint="单位：kg">
                 <div className="relative">
                   <input
                     type="number"
                     className="input pr-10"
-                    value={profile.weight}
+                    value={profile.weight || ''}
                     min={30}
                     max={200}
                     step={0.1}
-                    onChange={(e) => set({ weight: Math.max(30, Math.min(200, Number(e.target.value) || 60)) })}
+                    required
+                    placeholder="例如 58.5"
+                    onChange={(e) => set({ weight: Number(e.target.value) || 0 })}
                   />
                   <Weight size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                 </div>
               </Field>
-              <Field label="目标体重">
+              <Field label="目标体重（选填）" hint="不填写则按当前体重计算">
                 <div className="relative">
                   <input
                     type="number"
                     className="input pr-10"
-                    value={profile.targetWeight}
+                    value={profile.targetWeight || ''}
                     min={30}
                     max={200}
                     step={0.1}
-                    onChange={(e) =>
-                      set({ targetWeight: Math.max(30, Math.min(200, Number(e.target.value) || profile.weight)) })
-                    }
+                    placeholder="例如 54"
+                    onChange={(e) => set({ targetWeight: Number(e.target.value) || 0 })}
                   />
                   <Weight size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                 </div>
@@ -321,18 +310,18 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <h2 className="text-[14px] font-semibold">你的营养目标</h2>
               <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9.5px] text-white/50">
-                自动计算
+                {complete ? '自动计算' : '等待填写'}
               </span>
             </div>
 
             <div className="mt-4 rounded-2xl border border-lime-400/20 bg-lime-400/[.08] p-4">
               <p className="text-[10px] uppercase tracking-[0.14em] text-lime-400">每日热量目标</p>
               <p className="num mt-1 text-[34px] font-semibold leading-none">
-                {targets.calories}
-                <span className="ml-1.5 text-[12px] font-normal text-white/50">kcal</span>
+                {complete ? targets.calories : '—'}
+                {complete && <span className="ml-1.5 text-[12px] font-normal text-white/50">kcal</span>}
               </p>
               <p className="mt-1 text-[10.5px] text-white/45">
-                基础代谢 {bmr} · 每日消耗 {tdee} kcal
+                {complete ? `基础代谢 ${bmr} · 每日消耗 ${tdee} kcal` : '填写必填身体数据后生成个人目标'}
               </p>
             </div>
 
@@ -344,8 +333,8 @@ export default function Profile() {
               ].map(([label, value, unit]) => (
                 <div key={String(label)} className="rounded-xl border border-white/10 bg-white/[.04] py-2.5">
                   <p className="num text-[15px] font-semibold">
-                    {value}
-                    <span className="text-[9px] font-normal text-white/40">{unit}</span>
+                    {complete ? value : '—'}
+                    {complete && <span className="text-[9px] font-normal text-white/40">{unit}</span>}
                   </p>
                   <p className="mt-0.5 text-[9.5px] text-white/45">{label}</p>
                 </div>
@@ -356,13 +345,13 @@ export default function Profile() {
               <div>
                 <p className="text-[10px] text-white/45">BMI</p>
                 <p className="num text-[15px] font-semibold">
-                  {bmi} <span className="text-[10px] font-normal text-lime-400">{bmiInfo.label}</span>
+                  {complete ? bmi : '—'} <span className="text-[10px] font-normal text-lime-400">{complete ? bmiInfo.label : '待填写'}</span>
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-white/45">目标体重</p>
                 <p className="num text-[15px] font-semibold">
-                  {profile.targetWeight} <span className="text-[9px] font-normal text-white/40">kg</span>
+                  {profile.targetWeight || profile.weight || '—'} {(profile.targetWeight || profile.weight) > 0 && <span className="text-[9px] font-normal text-white/40">kg</span>}
                 </p>
               </div>
               <div className="text-right">
@@ -377,62 +366,6 @@ export default function Profile() {
               {profile.goal === 'lose' ? '0.82' : profile.goal === 'gain' ? '1.12' : '1.0'}。
             </p>
           </div>
-
-          {/* AI 引擎状态（只读，由服务端统一配置） */}
-          <Section icon={Cpu} title="AI 引擎状态" desc="模型与密钥由服务端统一管理，不在浏览器中配置">
-            <div className="space-y-3">
-              <div
-                className={`flex items-start gap-2.5 rounded-xl px-3.5 py-3 ${
-                  aiStatus.configured ? 'bg-lime-400/15' : 'bg-cream/80'
-                }`}
-              >
-                <Server size={14} className="mt-0.5 shrink-0 text-ink-600" />
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-900">
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        aiStatus.configured ? 'bg-lime-600' : 'bg-ink-500/40'
-                      }`}
-                    />
-                    {aiStatus.configured ? '服务端大模型已启用' : '本地营养引擎运行中'}
-                  </p>
-                  <p className="mt-1 text-[10.5px] leading-relaxed text-ink-600">
-                    {aiStatus.configured
-                      ? `当前模型：${aiStatus.model}。AI 分析与营养师对话均由服务端代理调用，浏览器不会接触到 API Key。`
-                      : '后端尚未配置模型密钥，AI 分析与对话会自动使用内置的 100+ 食物库与规则引擎，功能仍可完整体验。'}
-                  </p>
-                </div>
-              </div>
-
-              <button onClick={checkAI} disabled={refreshing} className="btn-ghost w-full px-4 py-2.5 text-[12px]">
-                {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                刷新引擎状态
-              </button>
-
-              <div className="rounded-xl bg-cream/70 px-3.5 py-2.5">
-                <p className="text-[10px] leading-relaxed text-ink-500">
-                  部署时在服务端设置 <span className="font-mono">AI_BASE_URL</span>、
-                  <span className="font-mono"> AI_API_KEY</span>、<span className="font-mono">AI_MODEL</span>{' '}
-                  环境变量即可自动启用，无需改动前端。
-                </p>
-              </div>
-            </div>
-          </Section>
-
-          {/* 数据 */}
-          <Section icon={Database} title="数据管理" desc="记录按账号隔离保存在当前浏览器">
-            <div className="flex flex-wrap gap-2">
-              <button onClick={resetDemoData} className="btn-ghost btn-sm">
-                <RotateCcw size={13} />
-                重置为示例数据
-              </button>
-            </div>
-            <div className="mt-4 space-y-1.5 text-[10.5px] text-ink-500">
-              <p>· 健康档案、饮食记录与对话按登录账号独立存储于 localStorage</p>
-              <p>· 清除浏览器站点数据会同时清空以上内容</p>
-              <p>· 菜谱与营养数据参考《中国食物成分表》与 USDA</p>
-            </div>
-          </Section>
 
           <p className="px-1 text-[10px] leading-relaxed text-ink-500">
             知膳提供营养教育与生活方式参考，不构成医疗诊断。若你处于孕期、哺乳期或有慢性疾病，请在医生或注册营养师指导下调整饮食。

@@ -8,8 +8,6 @@ import {
   MessageCircleMore,
   Sparkles,
   UserRound,
-  Wifi,
-  WifiOff,
 } from 'lucide-react'
 import { Logo, Toasts } from './ui'
 import { useApp } from '../context/AppContext'
@@ -28,11 +26,10 @@ const NAV = [
 const MOBILE_NAV = NAV.slice(0, 5)
 
 export default function AppShell() {
-  const { profile, aiStatus } = useApp()
+  const { profile } = useApp()
   const { isGuest } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const aiReady = aiStatus.configured
 
   function handleLogout() {
     navigate('/logout')
@@ -72,19 +69,6 @@ export default function AppShell() {
         </nav>
 
         <div className="mt-auto space-y-3">
-          <div className="rounded-2xl border border-clay bg-cream/70 p-3.5">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
-              {aiReady ? <Wifi size={13} /> : <WifiOff size={13} />}
-              AI 引擎
-            </div>
-            <p className="mt-1.5 text-[13px] font-semibold text-ink-900">
-              {aiReady ? '大模型已连接' : '本地营养引擎'}
-            </p>
-            <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-500">
-              {aiReady ? `服务端 · ${aiStatus.model}` : '服务端未配置模型 · 离线规则引擎运行中'}
-            </p>
-          </div>
-
           <div className="flex items-center gap-1">
             <NavLink
               to="/app/profile"

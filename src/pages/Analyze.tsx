@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
   ArrowRight,
@@ -21,6 +21,7 @@ import {
   addNutrition,
   caloriesOf,
   gradeText,
+  isProfileComplete,
   pct,
   roundNutrition,
   scaleNutrition,
@@ -52,6 +53,7 @@ function guessMealType(): MealType {
 export default function Analyze() {
   const { profile, aiStatus, targets, todayNutrition, addMeal, notify } = useApp()
   const { requireAuth } = useAuth()
+  const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [mealType, setMealType] = useState<MealType>(guessMealType)
   const [image, setImage] = useState<string | null>(null)
@@ -77,6 +79,11 @@ export default function Analyze() {
       return
     }
     if (!requireAuth('AI 营养分析')) return
+    if (!isProfileComplete(profile)) {
+      notify('请先填写有效的年龄、身高和当前体重，再进行个性化分析', 'info')
+      navigate('/app/profile')
+      return
+    }
     setLoading(true)
     setStep(1)
     setResult(null)
@@ -186,7 +193,11 @@ export default function Analyze() {
             ))}
           </div>
           <span className="text-[11px] text-ink-500">
-            今日还可摄入 <span className="num font-semibold text-ink-900">{remaining}</span> kcal
+            {isProfileComplete(profile) ? (
+              <>今日还可摄入 <span className="num font-semibold text-ink-900">{remaining}</span> kcal</>
+            ) : (
+              '完善健康档案后计算个人目标'
+            )}
           </span>
         </div>
 
