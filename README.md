@@ -11,8 +11,9 @@
 
 ## 在线体验
 
-- 公网地址：`https://nutrimind-7remyk8a3n-ol52qmd98h.preview.iga-pages.com`
+- 公网地址：`https://nutrimind-7remyk8a3n-b14o0vwuni.preview.iga-pages.com`
 - 演示账号：`demo@nutrimind.app` / `demo1234`
+- 线上已接入魔搭 ModelScope 推理服务（`Qwen/Qwen3.8-Flash-Next`），餐食分析与膳食建议均由该模型生成；未配置模型时自动降级为本地规则引擎。
 - 点击首页「免费开始」即以游客身份进入工作台；浏览概览、记录与报告无需注册。
 - 使用餐食分析、膳食建议等核心功能时会弹出登录引导，登录后自动回到当前功能页。
 - 注册后需在「健康档案」中填写真实的年龄、身高、体重，系统才会计算个人营养目标；未填写完整时，AI 分析会先引导补全，不使用假设数据给出结论。
