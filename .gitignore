@@ -13,5 +13,6 @@ ai-config.json
 data/
 *.zip
 .screenshots
+.trae/
 docs/
 .iga/
