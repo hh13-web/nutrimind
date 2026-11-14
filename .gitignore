@@ -16,3 +16,5 @@ data/
 .trae/
 docs/
 .iga/
+.wrangler/
+.dev.vars

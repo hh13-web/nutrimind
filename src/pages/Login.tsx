@@ -138,7 +138,7 @@ export default function Login() {
 
           <div className="mt-9 flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[.04] px-3.5 py-3 text-[10.5px] leading-relaxed text-white/45">
             <ShieldCheck size={14} className="shrink-0 text-lime-400/80" />
-            账号密码经 scrypt 加盐存储，AI 密钥只保留在服务端，不会下发到浏览器。
+            账号密码经加盐哈希存储，AI 密钥只保留在服务端，不会下发到浏览器。
           </div>
         </div>
 

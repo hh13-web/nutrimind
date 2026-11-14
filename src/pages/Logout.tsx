@@ -102,7 +102,7 @@ export default function Logout() {
 
               <p className="mt-5 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-ink-500">
                 <ShieldCheck size={12} className="mt-0.5 shrink-0" />
-                账号密码经 scrypt 加盐存储；AI 密钥只保留在服务端，不会下发到浏览器。
+                账号密码经加盐哈希存储；AI 密钥只保留在服务端，不会下发到浏览器。
               </p>
             </div>
           )}
