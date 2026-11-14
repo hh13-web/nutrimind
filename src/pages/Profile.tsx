@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import {
   Activity,
+  ArrowLeft,
+  ArrowRight,
   Check,
   Ruler,
   Save,
@@ -67,38 +70,49 @@ function Section({
 function Field({
   label,
   hint,
+  error,
   children,
 }: {
   label: string
   hint?: string
+  error?: string
   children: React.ReactNode
 }) {
   return (
     <label className="block">
       <span className="label">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[10px] text-ink-500">{hint}</span>}
+      {error ? (
+        <span className="mt-1 block text-[10px] font-medium text-coral">{error}</span>
+      ) : (
+        hint && <span className="mt-1 block text-[10px] text-ink-500">{hint}</span>
+      )}
     </label>
   )
 }
 
 export default function Profile() {
   const { profile, updateProfile, notify } = useApp()
+  const location = useLocation()
+  const fromAnalyze = new URLSearchParams(location.search).get('from') === 'analyze'
 
   // 草稿：编辑不立即持久化，点「保存档案」才写入
   const [draft, setDraft] = useState<ProfileType>(profile)
   const [dirty, setDirty] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [validationErrors, setValidationErrors] = useState<Partial<Record<'age' | 'height' | 'weight', string>>>({})
 
   // 切换账号时，草稿跟随新档案
   useEffect(() => {
     setDraft(profile)
     setDirty(false)
+    setValidationErrors({})
   }, [profile])
 
   const set = (patch: Partial<ProfileType>) => {
     setDraft((prev) => ({ ...prev, ...patch }))
     setDirty(true)
+    setValidationErrors({})
   }
 
   function toggle(key: 'dietPreferences' | 'allergies', value: string) {
@@ -107,10 +121,33 @@ export default function Profile() {
   }
 
   function handleSave() {
+    const errors: Partial<Record<'age' | 'height' | 'weight', string>> = {}
+    if (draft.age !== 0 && (!Number.isFinite(draft.age) || !Number.isInteger(draft.age) || draft.age < 12 || draft.age > 90)) {
+      errors.age = '年龄需为 12–90 岁的整数'
+    }
+    if (draft.height !== 0 && (!Number.isFinite(draft.height) || draft.height < 130 || draft.height > 220)) {
+      errors.height = '身高需在 130–220 cm 之间'
+    }
+    if (draft.weight !== 0 && (!Number.isFinite(draft.weight) || draft.weight < 30 || draft.weight > 200)) {
+      errors.weight = '体重需在 30–200 kg 之间'
+    }
+
+    setValidationErrors(errors)
+    const firstError = Object.values(errors)[0]
+    if (firstError) {
+      notify(firstError, 'error')
+      return
+    }
+
     updateProfile(draft)
     setDirty(false)
     setSavedAt(Date.now())
-    notify('档案已保存，营养目标已更新', 'success')
+    notify(
+      isProfileComplete(draft)
+        ? '档案已保存，营养目标已更新'
+        : '档案已保存，仍需补齐年龄、身高和体重',
+      'success',
+    )
   }
 
   const complete = isProfileComplete(draft)
@@ -133,40 +170,12 @@ export default function Profile() {
           </p>
         </div>
 
-        {/* 保存状态与按钮 */}
-        <div className="flex items-center gap-3">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${
-              dirty
-                ? 'border-wheat/40 bg-wheat/15 text-wheat'
-                : savedAt
-                  ? 'border-lime-500/30 bg-lime-400/20 text-ink-800'
-                  : 'border-clay bg-paper text-ink-500'
-            }`}
-          >
-            {dirty ? (
-              <>
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-wheat" />
-                有未保存的修改
-              </>
-            ) : savedAt ? (
-              <>
-                <Check size={12} />
-                已保存
-              </>
-            ) : (
-              '暂无修改'
-            )}
-          </span>
-          <button
-            onClick={handleSave}
-            disabled={!dirty}
-            className="btn-primary px-5 py-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Save size={15} />
-            保存档案
-          </button>
-        </div>
+        {fromAnalyze && (
+          <Link to="/app/analyze" className="btn-ghost px-4 py-2.5 text-[12.5px]">
+            <ArrowLeft size={15} />
+            返回继续记录
+          </Link>
+        )}
       </div>
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-lime-500/25 bg-lime-400/15 px-4 py-3">
@@ -208,23 +217,25 @@ export default function Profile() {
                   ))}
                 </div>
               </Field>
-              <Field label="年龄（必填）" hint="12–90 岁">
+              <Field label="年龄（必填）" hint="12–90 岁" error={validationErrors.age}>
                 <input
                   type="number"
                   className="input"
                   value={draft.age || ''}
+                  aria-invalid={Boolean(validationErrors.age)}
                   min={12}
                   max={90}
                   placeholder="请输入年龄"
                   onChange={(e) => set({ age: Number(e.target.value) || 0 })}
                 />
               </Field>
-              <Field label="身高（必填）" hint="单位：cm">
+              <Field label="身高（必填）" hint="130–220 cm" error={validationErrors.height}>
                 <div className="relative">
                   <input
                     type="number"
                     className="input pr-10"
                     value={draft.height || ''}
+                    aria-invalid={Boolean(validationErrors.height)}
                     min={130}
                     max={220}
                     placeholder="例如 165"
@@ -233,12 +244,13 @@ export default function Profile() {
                   <Ruler size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                 </div>
               </Field>
-              <Field label="当前体重（必填）" hint="单位：kg">
+              <Field label="当前体重（必填）" hint="30–200 kg" error={validationErrors.weight}>
                 <div className="relative">
                   <input
                     type="number"
                     className="input pr-10"
                     value={draft.weight || ''}
+                    aria-invalid={Boolean(validationErrors.weight)}
                     min={30}
                     max={200}
                     step={0.1}
@@ -428,6 +440,55 @@ export default function Profile() {
           <p className="px-1 text-[10px] leading-relaxed text-ink-500">
             知膳提供营养教育与生活方式参考，不构成医疗诊断。若你处于孕期、哺乳期或有慢性疾病，请在医生或注册营养师指导下调整饮食。
           </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-[1.75rem] border border-clay bg-paper p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div>
+          <p
+            className={`flex items-center gap-2 text-[12.5px] font-semibold ${
+              dirty ? 'text-wheat' : savedAt ? 'text-ink-900' : 'text-ink-600'
+            }`}
+          >
+            {dirty ? (
+              <>
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-wheat" />
+                未保存修改
+              </>
+            ) : savedAt ? (
+              <>
+                <Check size={14} className="text-lime-500" />
+                保存成功
+              </>
+            ) : (
+              '档案修改后请保存'
+            )}
+          </p>
+          <p className="mt-1 text-[10.5px] leading-relaxed text-ink-500">
+            {dirty
+              ? '保存后，全站营养目标与膳食建议才会使用最新档案。'
+              : savedAt
+                ? complete
+                  ? '档案已保存，营养目标已更新。'
+                  : '档案已保存，仍需补齐年龄、身高和体重。'
+                : '年龄、身高和体重可稍后补齐，其他已填写内容也能保存。'}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          {fromAnalyze && savedAt && !dirty && (
+            <Link to="/app/analyze" className="btn-ghost justify-center px-4 py-2.5 text-[12.5px]">
+              返回继续记录
+              <ArrowRight size={14} />
+            </Link>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={!dirty}
+            className="btn-primary justify-center px-5 py-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Save size={15} />
+            保存档案
+          </button>
         </div>
       </div>
     </div>

@@ -56,7 +56,7 @@ export default function Coach() {
   async function send(text?: string) {
     const question = (text ?? draft).trim()
     if (!question || pending) return
-    if (!requireAuth('AI 营养师')) return
+    if (!requireAuth('AI 膳食助手')) return
     if (!isProfileComplete(profile)) {
       notify('请先填写有效的年龄、身高和当前体重，AI 才能结合你的身体数据回答', 'info')
       navigate('/app/profile')
@@ -97,7 +97,7 @@ export default function Coach() {
       updateChatMessage(replyId, res.content, res.engine)
     } catch {
       updateChatMessage(replyId, '抱歉，我暂时无法回答这个问题，请稍后再试。')
-      notify('AI 营养师响应失败', 'error')
+      notify('AI 膳食助手响应失败', 'error')
     } finally {
       setPending(false)
     }
@@ -114,7 +114,7 @@ export default function Coach() {
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-paper bg-lime-500" />
             </span>
             <div>
-              <p className="text-[13.5px] font-semibold text-ink-900">知膳 AI 营养师</p>
+              <p className="text-[13.5px] font-semibold text-ink-900">知膳 AI 膳食助手</p>
               <p className="text-[10.5px] text-ink-500">{aiReady ? aiStatus.model : '本地营养引擎'}</p>
             </div>
           </div>
@@ -182,7 +182,7 @@ export default function Coach() {
               <Bot size={15} />
             </span>
             <div>
-              <h1 className="text-[14px] font-semibold text-ink-900">营养问答</h1>
+              <h1 className="text-[14px] font-semibold text-ink-900">膳食建议</h1>
               <p className="flex items-center gap-1.5 text-[10px] text-ink-500">
                 <span className="h-1.5 w-1.5 rounded-full bg-lime-500" />
                 {aiReady ? '在线 · 已读取你的健康档案' : '本地模式 · 已读取你的健康档案'}

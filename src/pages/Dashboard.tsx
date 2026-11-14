@@ -7,23 +7,10 @@ import {
   Plus,
   Sparkles,
   Trash2,
-  TrendingUp,
-  UtensilsCrossed,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { LineChart, MealIcon, Ring } from '../components/ui'
-import {
-  bmiLabel,
-  calcBMI,
-  calcTDEE,
-  isProfileComplete,
-  lastNDays,
-  prettyDate,
-  pct,
-  shortDate,
-  sumMeals,
-  todayKey,
-} from '../lib/nutrition'
+import { MealIcon, Ring } from '../components/ui'
+import { isProfileComplete, prettyDate, pct, todayKey } from '../lib/nutrition'
 import { MEAL_LABELS, type MealType } from '../types'
 
 function greeting(): string {
@@ -36,24 +23,18 @@ function greeting(): string {
 }
 
 export default function Dashboard() {
-  const { profile, meals, todayMeals, todayNutrition, targets, removeMeal, notify } = useApp()
+  const { profile, todayMeals, todayNutrition, targets, removeMeal, notify } = useApp()
   const today = todayKey()
   const complete = isProfileComplete(profile)
-  const bmi = calcBMI(profile)
-  const bmiInfo = bmiLabel(bmi)
-  const tdee = calcTDEE(profile)
-  const week = lastNDays(7)
-  const weekData = week.map((d) => Math.round(sumMeals(meals.filter((m) => m.date === d)).calories))
-  const avgCalories = Math.round(weekData.reduce((a, b) => a + b, 0) / weekData.length)
 
   const calPct = pct(todayNutrition.calories, targets.calories)
   const left = Math.max(0, Math.round(targets.calories - todayNutrition.calories))
 
   const insights: { text: string; tone: 'warn' | 'good' | 'info' }[] = []
-  if (!complete) {
-    insights.push({ text: '请先在健康档案中填写年龄、身高和当前体重，AI 才能按你的身体数据计算营养目标。', tone: 'info' })
-  } else if (todayMeals.length === 0) {
-    insights.push({ text: '今天还没有记录。用一句话描述你吃过的食物，我会立刻拆解营养结构。', tone: 'info' })
+  if (todayMeals.length === 0) {
+    insights.push({ text: '今天还没有记录。记录所吃的食物后，这里会根据当前记录给出膳食提示。', tone: 'info' })
+  } else if (!complete) {
+    insights.push({ text: `今天已记录 ${todayMeals.length} 个餐次，共 ${Math.round(todayNutrition.calories)} kcal。继续记录其余餐次，可更完整地了解今日饮食。`, tone: 'info' })
   } else {
     const proteinGap = Math.round(targets.protein - todayNutrition.protein)
     const proteinFix = profile.dietPreferences.includes('素食')
@@ -85,25 +66,6 @@ export default function Dashboard() {
     } else if (calPct > 75 && calPct <= 100) {
       insights.push({ text: `还剩 ${left} kcal 的空间，晚餐控制在 500 kcal 内即可。`, tone: 'info' })
     }
-    if (avgCalories > 0) {
-      const diff = avgCalories - targets.calories
-      if (Math.abs(diff) >= 80) {
-        insights.push({
-          text: `近 7 天平均摄入 ${avgCalories} kcal，${diff > 0 ? `比你的目标高 ${diff}` : `比你的目标低 ${-diff}`} kcal，${
-            profile.goal === 'lose'
-              ? diff > 0
-                ? '建议减少外卖与含糖饮料。'
-                : '缺口偏大，注意别掉肌肉。'
-              : profile.goal === 'gain'
-                ? diff > 0
-                  ? '增肌期允许小幅盈余，继续观察体重变化。'
-                  : '热量偏低，增肌需要更充足的碳水。'
-                : '整体稳定，继续保持即可。'
-          }`,
-          tone: diff > 0 ? 'warn' : 'good',
-        })
-      }
-    }
   }
 
   const mealGroups: { type: MealType; label: string }[] = [
@@ -130,17 +92,21 @@ export default function Dashboard() {
             {greeting()}，{profile.name}。
           </h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/app/analyze" className="btn-primary px-4 py-2.5 text-[13px]">
-            <Sparkles size={15} />
-            记录并分析一餐
-          </Link>
-          <Link to="/app/log" className="btn-ghost hidden px-4 py-2.5 text-[13px] sm:inline-flex">
-            <Plus size={15} />
-            全部记录
+        <Link to="/app/analyze" className="btn-primary px-5 py-2.5 text-[13px]">
+          <Plus size={16} />
+          记录饮食
+        </Link>
+      </div>
+
+      {!complete && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-clay bg-paper px-4 py-3 text-[11.5px] shadow-soft">
+          <p className="text-ink-600">补齐年龄、身高和体重，生成你的个人营养目标。</p>
+          <Link to="/app/profile" className="inline-flex items-center gap-1 font-semibold text-ink-900">
+            完善健康档案
+            <ArrowRight size={13} />
           </Link>
         </div>
-      </div>
+      )}
 
       {/* 主区 */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -209,16 +175,16 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* AI 洞察 */}
+        {/* 今日膳食提示 */}
         <div className="flex flex-col rounded-[2rem] border border-clay bg-paper p-6 shadow-soft">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-lime-400/40 text-ink-900">
-                <Sparkles size={15} />
-              </span>
-              <h2 className="text-[14px] font-semibold text-ink-900">AI 今日洞察</h2>
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-lime-400/40 text-ink-900">
+              <Sparkles size={15} />
+            </span>
+            <div>
+              <h2 className="text-[14px] font-semibold text-ink-900">今日膳食提示</h2>
+              <p className="mt-0.5 text-[10px] text-ink-500">根据当前记录实时计算</p>
             </div>
-            <span className="text-[10px] font-medium text-ink-500">实时</span>
           </div>
 
           <div className="mt-5 space-y-3">
@@ -240,21 +206,19 @@ export default function Dashboard() {
           >
             <span className="flex items-center gap-2">
               <MessageCircleMore size={15} />
-              营养问答
+              获取膳食建议
             </span>
             <ArrowRight size={14} />
           </Link>
         </div>
       </div>
 
-      {/* 第二行 */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* 今日饮食 */}
-        <div className="rounded-[2rem] border border-clay bg-paper p-6 shadow-soft lg:col-span-2">
+      {/* 今日饮食主内容 */}
+      <div className="rounded-[2rem] border border-clay bg-paper p-5 shadow-soft sm:p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-ink-900">今日饮食</h2>
+            <h2 className="text-[15px] font-semibold text-ink-900">今日饮食记录</h2>
             <Link to="/app/log" className="flex items-center gap-1 text-[11.5px] font-medium text-ink-500 hover:text-ink-900">
-              全部记录
+              查看历史记录
               <ArrowUpRight size={13} />
             </Link>
           </div>
@@ -283,7 +247,7 @@ export default function Dashboard() {
                         className="mt-1 inline-flex items-center gap-1 text-[11.5px] text-ink-500 hover:text-ink-900"
                       >
                         <Plus size={12} />
-                        添加{g.label}
+                        记录{g.label}
                       </Link>
                     ) : (
                       <div className="mt-1 space-y-1.5">
@@ -312,103 +276,6 @@ export default function Dashboard() {
             })}
           </div>
         </div>
-
-        {/* 右列 */}
-        <div className="space-y-4">
-          {/* 7 天趋势 */}
-          <div className="rounded-[2rem] border border-clay bg-paper p-6 shadow-soft">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={15} className="text-ink-700" />
-                <h2 className="text-[13.5px] font-semibold text-ink-900">近 7 日热量</h2>
-              </div>
-              <span className="num text-[10.5px] text-ink-500">均值 {avgCalories}</span>
-            </div>
-            <div className="mt-2 -mx-1">
-              <LineChart data={weekData} labels={week.map(shortDate)} target={targets.calories} height={132} />
-            </div>
-          </div>
-
-          {/* 身体档案 */}
-          <div className="rounded-[2rem] border border-clay bg-paper p-6 shadow-soft">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[13.5px] font-semibold text-ink-900">身体档案</h2>
-              <Link to="/app/profile" className="text-[11px] text-ink-500 hover:text-ink-900">
-                编辑
-              </Link>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-[10.5px] text-ink-500">BMI</p>
-                <p className="num mt-0.5 text-lg font-semibold text-ink-900">
-                  {complete ? bmi : '—'}
-                  <span className={`ml-1.5 text-[11px] font-medium ${bmiInfo.tone}`}>{complete ? bmiInfo.label : '待填写'}</span>
-                </p>
-              </div>
-              <div>
-                <p className="text-[10.5px] text-ink-500">每日消耗</p>
-                <p className="num mt-0.5 text-lg font-semibold text-ink-900">
-                  {complete ? tdee : '—'}
-                  {complete && <span className="ml-1 text-[10px] font-normal text-ink-500">kcal</span>}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4">
-              {complete ? (
-                <>
-                  <div className="flex items-center justify-between rounded-xl bg-cream/70 px-3 py-2.5">
-                    <div>
-                      <p className="text-[10px] text-ink-500">距目标体重</p>
-                      <p className="num text-[14px] font-semibold text-ink-900">
-                        {(profile.weight - (profile.targetWeight || profile.weight)) > 0
-                          ? `${(profile.weight - (profile.targetWeight || profile.weight)).toFixed(1)} kg`
-                          : '已达成'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-ink-500">预计周期</p>
-                      <p className="num text-[14px] font-semibold text-ink-900">
-                        约 {Math.max(1, Math.round(((profile.weight - (profile.targetWeight || profile.weight)) * 7700) / ((tdee - targets.calories) || 300) / 7))} 周
-                      </p>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] leading-relaxed text-ink-500">
-                    按每日约 {Math.max(0, tdee - targets.calories)} kcal 的温和缺口估算，保持记录即可稳定推进。
-                  </p>
-                </>
-              ) : (
-                <Link to="/app/profile" className="block rounded-xl bg-cream/70 px-3 py-3 text-[11px] font-medium text-ink-700 hover:text-ink-900">
-                  填写身体数据，生成我的营养目标 →
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 快捷入口 */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { to: '/app/analyze', icon: Sparkles, title: '餐食分析', desc: '记录一餐并拆解营养' },
-          { to: '/app/coach', icon: MessageCircleMore, title: '营养问答', desc: '随时向 AI 营养师提问' },
-          { to: '/app/log', icon: UtensilsCrossed, title: '饮食记录', desc: '完整记录每一天' },
-        ].map((q) => (
-          <Link
-            key={q.to}
-            to={q.to}
-            className="group flex items-center gap-3.5 rounded-2xl border border-clay bg-paper px-5 py-4 transition-all hover:-translate-y-0.5 hover:shadow-soft"
-          >
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-cream text-ink-900">
-              <q.icon size={17} />
-            </span>
-            <div className="flex-1">
-              <p className="text-[13px] font-semibold text-ink-900">{q.title}</p>
-              <p className="text-[11px] text-ink-500">{q.desc}</p>
-            </div>
-            <ArrowUpRight size={15} className="text-ink-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-          </Link>
-        ))}
-      </div>
 
       <div className="flex items-center justify-center gap-2 pt-2 text-[10.5px] text-ink-500">
         <Flame size={11} />

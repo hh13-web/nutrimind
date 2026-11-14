@@ -36,6 +36,7 @@ function ProtectedApp() {
   return (
     <AppProvider key={user?.id ?? 'guest'}>
       <AppShell />
+      <Onboarding />
     </AppProvider>
   )
 }
@@ -58,7 +59,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <LoginPrompt />
-      <Onboarding />
     </>
   )
 }

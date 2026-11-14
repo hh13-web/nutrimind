@@ -82,7 +82,7 @@ export function saveChat(messages: ChatMessage[]) {
 
 export function buildWelcomeMessage(name?: string): string {
   const who = name || getSessionUser()?.name
-  return `你好${who ? `，${who}` : ''}，我是你的 AI 营养师 **知膳** 👋
+  return `你好${who ? `，${who}` : ''}，我是你的 AI 膳食助手 **知膳**。
 
 我会结合你的健康档案和你记录的饮食来回答。你可以直接问我：
 

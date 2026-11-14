@@ -332,7 +332,7 @@ export async function analyzeMeal(
 }
 
 // ─────────────────────────────────────────────────────────────
-// 三、AI 营养师对话
+// 三、AI 膳食助手对话
 // ─────────────────────────────────────────────────────────────
 
 export function buildContext(profile: Profile, meals: Meal[]): string {
@@ -348,7 +348,7 @@ export function buildContext(profile: Profile, meals: Meal[]): string {
 【今日餐食】${nameList || '暂无记录'}。`
 }
 
-const COACH_SYSTEM = `你是「知膳」AI 营养师，一位温和、专业、务实的注册营养师。你会结合用户的健康档案、每日营养目标与当日摄入数据给出建议。
+const COACH_SYSTEM = `你是「知膳」AI 膳食助手，一位温和、专业、务实的注册营养师。你会结合用户的健康档案、每日营养目标与当日摄入数据给出建议。
 规则：
 1. 用中文回答，结构清晰，多用短句和分点，总长度控制在 220 字以内。
 2. 优先给出具体食物、克数与可执行动作，避免空泛口号。
@@ -515,7 +515,7 @@ export function localCoachReply(question: string, ctx: CoachContext): string {
 
   if (/(今天|现在|评价|怎么样|如何|打分|复盘)/.test(q)) {
     if (today.length === 0) {
-      return `今天还没有饮食记录。你可以先去 **AI 营养分析** 页，用一句话描述吃了什么，我会立刻拆解营养。
+      return `今天还没有饮食记录。你可以先去 **记录饮食** 页，用一句话描述吃了什么，我会立刻拆解营养。
 
 你的每日目标是 **${targets.calories} kcal / 蛋白质 ${targets.protein}g**，截至目前还有完整空间。`
     }
@@ -613,7 +613,7 @@ ${isVeg ? '- 北豆腐 200g + 藜麦 50g → 约 21g（素食友好）' : ''}
   }
 
   if (/(你好|hi|hello|你是谁|介绍)/.test(q)) {
-    return `你好，我是**知膳 AI 营养师**。我会结合你的档案（${profile.gender === 'female' ? '女' : '男'}，${profile.age}岁，${profile.weight}kg，目标${profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}）和每日摄入数据，给出具体的吃法与克数。
+    return `你好，我是**知膳 AI 膳食助手**。我会结合你的档案（${profile.gender === 'female' ? '女' : '男'}，${profile.age}岁，${profile.weight}kg，目标${profile.goal === 'lose' ? '减脂' : profile.goal === 'gain' ? '增肌' : '维持'}）和每日摄入数据，给出具体的吃法与克数。
 
 你可以直接问我：
 - 「今天吃得怎么样？」

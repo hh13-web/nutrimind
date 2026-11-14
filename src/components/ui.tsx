@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Apple, Check, Info, Moon, Sun, Sunrise, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Apple, ArrowRight, Check, Info, Moon, Sun, Sunrise, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { MealType } from '../types'
 
@@ -355,11 +356,12 @@ export function MarkdownLite({ text }: { text: string }) {
 export function Toasts() {
   const { toasts, dismissToast } = useApp()
   return (
-    <div className="pointer-events-none fixed bottom-6 right-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2 sm:right-6">
+    <div className="pointer-events-none fixed bottom-24 right-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2 sm:right-6 lg:bottom-6">
       {toasts.map((t) => (
         <div
           key={t.id}
           className="pointer-events-auto flex animate-fadeUp items-center gap-3 rounded-2xl border border-clay bg-paper px-4 py-3 shadow-lift"
+          role="status"
         >
           <span
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
@@ -368,8 +370,20 @@ export function Toasts() {
           >
             {t.tone === 'info' ? <Info size={14} /> : <Check size={14} />}
           </span>
-          <p className="flex-1 text-[13px] font-medium text-ink-800">{t.message}</p>
-          <button onClick={() => dismissToast(t.id)} className="text-ink-500 hover:text-ink-900">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium leading-relaxed text-ink-800">{t.message}</p>
+            {t.action && (
+              <Link
+                to={t.action.to}
+                onClick={() => dismissToast(t.id)}
+                className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-ink-900 underline decoration-lime-500 decoration-2 underline-offset-4"
+              >
+                {t.action.label}
+                <ArrowRight size={12} />
+              </Link>
+            )}
+          </div>
+          <button onClick={() => dismissToast(t.id)} className="shrink-0 text-ink-500 hover:text-ink-900" aria-label="关闭提示">
             <X size={14} />
           </button>
         </div>

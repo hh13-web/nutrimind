@@ -274,8 +274,8 @@ function Hero() {
 
             <Reveal delay={140}>
               <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-ink-600 sm:text-base">
-                用一句话描述你吃了什么，知膳会像注册营养师一样完成
-                <strong className="font-semibold text-ink-900">食物识别、营养拆解与个性化处方</strong>
+                用一句话描述你吃了什么，知膳会完成
+                <strong className="font-semibold text-ink-900">食物拆解、营养计算与个性化膳食建议</strong>
                 。它记得你的身体数据、目标与今天的每一口。
               </p>
             </Reveal>
@@ -419,7 +419,7 @@ function Features() {
             </div>
           </Reveal>
 
-          {/* 个性化处方 */}
+          {/* 个性化膳食建议 */}
           <Reveal delay={120} className="md:col-span-2">
             <div className="flex h-full flex-col rounded-[2rem] border border-clay bg-paper p-7">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-lime-400/40 text-ink-900">
@@ -446,14 +446,14 @@ function Features() {
             </div>
           </Reveal>
 
-          {/* AI 营养师 */}
+          {/* AI 膳食助手 */}
           <Reveal delay={160} className="md:col-span-2">
             <div className="flex h-full flex-col rounded-[2rem] border border-clay bg-paper p-7">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-ink-900/5 text-ink-900">
                 <MessageCircleMore size={20} />
               </span>
               <h3 className="mt-6 text-[17px] font-semibold leading-snug text-ink-900">
-                随时可问的 AI 营养师
+                随时可问的 AI 膳食助手
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ink-600">
                 它知道你今天的全部摄入，回答不是通用科普，而是「你还差多少、怎么补」。
@@ -476,10 +476,10 @@ function Features() {
                 <TrendingUp size={20} />
               </span>
               <h3 className="mt-6 text-[17px] font-semibold leading-snug text-ink-900">
-                7 天趋势与 AI 周报
+                7 天趋势与阶段膳食总结
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ink-600">
-                热量、蛋白质、纤维的达成趋势一目了然，AI 自动总结模式与改进点。
+                热量、蛋白质、纤维的达成趋势一目了然，本地规则根据真实记录总结模式与改进点。
               </p>
               <div className="mt-auto pt-5">
                 <div className="flex h-16 items-end gap-1.5">
@@ -540,7 +540,7 @@ function HowItWorks() {
     {
       n: '03',
       icon: HeartPulse,
-      title: '获得个性化处方',
+      title: '获得膳食建议',
       desc: '结合目标与当天进度，告诉你缺口在哪、下一餐具体吃什么、吃多少。',
     },
   ]

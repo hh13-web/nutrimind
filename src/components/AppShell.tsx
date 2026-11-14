@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
@@ -17,27 +17,49 @@ import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { prettyDate, todayKey } from '../lib/nutrition'
 
-/** 核心主流程：记录 → 分析 → 答疑 */
+/** 核心主流程：记录 → 分析 → 建议 */
 const PRIMARY_NAV = [
   { to: '/app', label: '今日概览', icon: LayoutDashboard, end: true },
-  { to: '/app/analyze', label: '餐食分析', icon: Sparkles },
-  { to: '/app/coach', label: '营养问答', icon: MessageCircleMore },
+  { to: '/app/analyze', label: '记录饮食', icon: Sparkles },
+  { to: '/app/coach', label: '膳食建议', icon: MessageCircleMore },
 ]
 
-/** 辅助功能：历史记录、报告、档案 */
+/** 更多：历史记录、趋势报告、健康档案 */
 const SECONDARY_NAV = [
-  { to: '/app/log', label: '饮食记录', icon: ClipboardList },
-  { to: '/app/report', label: '营养报告', icon: ChartLine },
+  { to: '/app/log', label: '历史记录', icon: ClipboardList },
+  { to: '/app/report', label: '趋势报告', icon: ChartLine },
   { to: '/app/profile', label: '健康档案', icon: UserRound },
 ]
 
 export default function AppShell() {
-  const { profile } = useApp()
+  const { profile, analysisSession } = useApp()
   const { isGuest } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [auxOpen, setAuxOpen] = useState(false)
   const [moreSheetOpen, setMoreSheetOpen] = useState(false)
+  const isSecondaryActive = SECONDARY_NAV.some(
+    (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
+  )
+
+  useEffect(() => {
+    if (isSecondaryActive) setAuxOpen(true)
+  }, [isSecondaryActive])
+
+  useEffect(() => {
+    setMoreSheetOpen(false)
+  }, [pathname])
+
+  let analysisNotice: string | null = null
+  if (analysisSession && !analysisSession.savedMealId) {
+    if (analysisSession.status === 'running') {
+      analysisNotice = '餐食分析中，可继续浏览其他页面'
+    } else if (analysisSession.status === 'done') {
+      analysisNotice = '分析已完成，尚未加入饮食记录'
+    } else if (analysisSession.status === 'error') {
+      analysisNotice = '分析未完成，返回查看原因'
+    }
+  }
 
   function handleLogout() {
     navigate('/logout')
@@ -85,13 +107,14 @@ export default function AppShell() {
             </div>
           </div>
 
-          {/* 辅助功能（可折叠） */}
+          {/* 更多（辅助功能，可折叠） */}
           <div>
             <button
               onClick={() => setAuxOpen((v) => !v)}
               className="mb-2 flex w-full items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400 hover:text-ink-600"
+              aria-expanded={auxOpen}
             >
-              <span>辅助功能</span>
+              <span>更多</span>
               <ChevronDown
                 size={13}
                 className={`transition-transform ${auxOpen ? 'rotate-180' : ''}`}
@@ -161,12 +184,6 @@ export default function AppShell() {
           <span className="rounded-full border border-clay bg-paper px-2.5 py-1 text-[10px] font-semibold text-ink-500">
             {prettyDate(todayKey()).replace(' ', ' · ')}
           </span>
-          <NavLink
-            to="/app/profile"
-            className="grid h-8 w-8 place-items-center rounded-full bg-ink-900 text-[12px] font-semibold text-lime-400"
-          >
-            {profile.name.slice(0, 1)}
-          </NavLink>
           <button
             onClick={handleLogout}
             className="grid h-8 w-8 place-items-center rounded-full text-ink-500 transition-colors hover:bg-coral/10 hover:text-coral"
@@ -178,8 +195,26 @@ export default function AppShell() {
       </header>
 
       <main className="min-h-screen pb-24 lg:pb-0 lg:pl-[252px]">
-        <div key={pathname} className="mx-auto w-full max-w-[1180px] animate-fadeIn px-4 py-6 sm:px-7 lg:px-9 lg:py-9">
-          <Outlet />
+        <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-7 lg:px-9 lg:py-9">
+          {analysisNotice && (
+            <div role="status" className="mb-4">
+              <NavLink
+                to="/app/analyze"
+                className="flex items-center gap-2.5 rounded-2xl border border-clay/80 bg-paper/85 px-4 py-3 text-[12px] font-medium text-ink-700 transition-colors hover:border-ink-900/25 hover:text-ink-900"
+              >
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    analysisSession?.status === 'error' ? 'bg-coral' : 'bg-lime-400'
+                  }`}
+                />
+                <span>{analysisNotice}</span>
+                <ArrowUpRight size={14} className="ml-auto shrink-0 text-ink-500" />
+              </NavLink>
+            </div>
+          )}
+          <div key={pathname} className="animate-fadeIn">
+            <Outlet />
+          </div>
         </div>
       </main>
 
@@ -213,10 +248,17 @@ export default function AppShell() {
           ))}
           <button
             onClick={() => setMoreSheetOpen(true)}
-            className="flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-ink-500 transition-colors"
+            className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${
+              isSecondaryActive ? 'text-ink-900' : 'text-ink-500'
+            }`}
+            aria-expanded={moreSheetOpen}
           >
-            <span className="grid h-8 w-8 place-items-center rounded-xl text-ink-500">
-              <ClipboardList size={17} strokeWidth={1.8} />
+            <span
+              className={`grid h-8 w-8 place-items-center rounded-xl transition-colors ${
+                isSecondaryActive ? 'bg-ink-900 text-lime-400' : 'text-ink-500'
+              }`}
+            >
+              <ClipboardList size={17} strokeWidth={isSecondaryActive ? 2.2 : 1.8} />
             </span>
             更多
           </button>
@@ -236,7 +278,7 @@ export default function AppShell() {
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-clay" />
             <div className="px-4">
               <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
-                辅助功能
+                更多
               </p>
               <div className="space-y-1">
                 {SECONDARY_NAV.map((item) => (

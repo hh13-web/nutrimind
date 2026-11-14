@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
@@ -13,11 +13,11 @@ import {
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import { analyzeMeal } from '../lib/ai'
 import { FOOD_MAP } from '../data/foods'
 import {
   addNutrition,
   caloriesOf,
+  gradeOf,
   gradeText,
   isProfileComplete,
   pct,
@@ -28,7 +28,7 @@ import {
   zeroNutrition,
 } from '../lib/nutrition'
 import { MacroSplit, Ring, FoodAvatar } from '../components/ui'
-import { MEAL_LABELS, type AnalysisResult, type MealType } from '../types'
+import { MEAL_LABELS, type MealType } from '../types'
 
 const EXAMPLES = [
   '一碗牛肉面、一个煎蛋、一杯无糖豆浆',
@@ -38,38 +38,59 @@ const EXAMPLES = [
   '三文鱼 120g、糙米饭一碗、西兰花 200g',
 ]
 
-const STEPS = ['理解自然语言描述', '匹配食物营养知识库', '计算热量与七大营养素', '生成个性化营养处方']
+const STEPS = ['理解自然语言描述', '匹配食物营养知识库', '计算热量与七大营养素', '生成个性化膳食建议']
 
 // 页面顶部的三步流程
 const FLOW_STEPS = [
-  { n: 1, title: '描述餐食', desc: '用一句话写下你吃了什么' },
-  { n: 2, title: 'AI 营养分析', desc: '拆解热量与营养素并评分' },
-  { n: 3, title: '加入今日饮食', desc: '记录后在概览中持续追踪' },
+  { n: 1, title: '记录饮食', desc: '用一句话写下你吃了什么' },
+  { n: 2, title: 'AI 分析', desc: '拆解热量与营养素并评分' },
+  { n: 3, title: '确认入档', desc: '保存后查看记录并获取建议' },
 ]
 
-function guessMealType(): MealType {
-  const h = new Date().getHours()
-  if (h < 10) return 'breakfast'
-  if (h < 15) return 'lunch'
-  if (h < 21) return 'dinner'
-  return 'snack'
-}
-
 export default function Analyze() {
-  const { profile, aiStatus, targets, todayNutrition, addMeal, notify } = useApp()
+  const {
+    profile,
+    aiStatus,
+    targets,
+    todayNutrition,
+    analysisSession,
+    updateAnalysisDraft,
+    updateAnalysisResult,
+    startAnalysis,
+    saveAnalysis,
+    resetAnalysis,
+    notify,
+  } = useApp()
   const { requireAuth } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const initialMeal = (searchParams.get('meal') as MealType) || guessMealType()
-  const [input, setInput] = useState('')
-  const [mealType, setMealType] = useState<MealType>(
-    ['breakfast', 'lunch', 'dinner', 'snack'].includes(initialMeal) ? initialMeal : guessMealType(),
-  )
-  const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(0)
-  const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [added, setAdded] = useState(false)
+  const { input, mealType, result, savedMealId, status, error } = analysisSession
+  const loading = status === 'running'
+  const added = Boolean(savedMealId)
   const aiReady = aiStatus.configured
+  const requestedMeal = searchParams.get('meal') as MealType | null
+
+  useEffect(() => {
+    if (
+      requestedMeal &&
+      ['breakfast', 'lunch', 'dinner', 'snack'].includes(requestedMeal) &&
+      status === 'editing' &&
+      mealType !== requestedMeal
+    ) {
+      updateAnalysisDraft({ mealType: requestedMeal })
+    }
+  }, [mealType, requestedMeal, status, updateAnalysisDraft])
+
+  useEffect(() => {
+    if (!loading) {
+      setStep(0)
+      return
+    }
+    setStep(1)
+    const timer = window.setInterval(() => setStep((s) => Math.min(3, s + 1)), 900)
+    return () => window.clearInterval(timer)
+  }, [loading])
 
   const remaining = Math.max(0, Math.round(targets.calories - todayNutrition.calories))
 
@@ -78,45 +99,24 @@ export default function Analyze() {
     return result.items.reduce((acc, it) => addNutrition(acc, it.nutrition), zeroNutrition())
   }, [result])
 
-  const liveScore = useMemo(() => (result ? scoreMeal(totals, targets, result.mealType) : 0), [result, totals, targets])
+  const liveScore = result?.score ?? 0
 
-  async function run() {
+  function run() {
     if (!input.trim()) {
-      notify('请描述你吃了什么', 'error')
+      notify('请先描述你吃了什么', 'error')
       return
     }
     if (!requireAuth('餐食分析')) return
     if (!isProfileComplete(profile)) {
       notify('请先填写有效的年龄、身高和当前体重，再进行个性化分析', 'info')
-      navigate('/app/profile')
+      navigate('/app/profile?from=analyze')
       return
     }
-    setLoading(true)
-    setStep(1)
-    setResult(null)
-    setAdded(false)
-    const timer = window.setInterval(() => setStep((s) => Math.min(3, s + 1)), 900)
-    try {
-      const res = await analyzeMeal(input.trim(), profile, mealType, aiStatus)
-      setResult(res)
-      setStep(4)
-      notify(
-        res.engine === 'llm' ? 'AI 已完成营养分析，记得加入今日饮食' : '本地营养引擎已完成分析',
-        'success',
-      )
-    } catch (e) {
-      notify(e instanceof Error ? e.message : '分析失败，请稍后重试', 'error')
-    } finally {
-      window.clearInterval(timer)
-      window.setTimeout(() => {
-        setLoading(false)
-        setStep(0)
-      }, 260)
-    }
+    void startAnalysis()
   }
 
   function updateGrams(index: number, grams: number) {
-    if (!result) return
+    if (!result || added) return
     const nextGrams = Math.max(1, Math.min(2000, Math.round(Number(grams) || 1)))
     const items = result.items.map((it, i) => {
       if (i !== index) return it
@@ -126,24 +126,15 @@ export default function Analyze() {
         : roundNutrition(scaleNutrition(it.nutrition, nextGrams / Math.max(1, it.grams)))
       return { ...it, grams: nextGrams, nutrition }
     })
-    const nextTotals = items.reduce((acc, it) => addNutrition(acc, it.nutrition), zeroNutrition())
+    const nextTotals = roundNutrition(items.reduce((acc, it) => addNutrition(acc, it.nutrition), zeroNutrition()))
     const nextScore = scoreMeal(nextTotals, targets, result.mealType)
-    setResult({ ...result, items, totals: roundNutrition(nextTotals), score: nextScore })
-  }
-
-  function saveMeal() {
-    if (!result) return
-    addMeal({
-      id: Math.random().toString(36).slice(2, 10),
-      date: todayKey(),
-      type: result.mealType,
-      items: result.items,
-      nutrition: roundNutrition(totals),
-      createdAt: Date.now(),
-      engine: result.engine,
+    updateAnalysisResult({
+      ...result,
+      items,
+      totals: nextTotals,
+      score: nextScore,
+      grade: gradeOf(nextScore),
     })
-    setAdded(true)
-    notify(`已加入今日${MEAL_LABELS[result.mealType]}，可在概览中查看`, 'success')
   }
 
   return (
@@ -173,10 +164,10 @@ export default function Analyze() {
         <div>
           <p className="eyebrow">Meal analysis</p>
           <h1 className="mt-1.5 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.02em] text-ink-900">
-            餐食分析
+            记录饮食
           </h1>
           <p className="mt-1.5 text-[13px] text-ink-600">
-            描述一餐吃了什么，AI 会拆解营养并给出评分，确认后加入今日饮食记录。
+            先用文字记录一餐，再完成 AI 分析，确认结果后加入饮食记录。
           </p>
         </div>
         <span
@@ -198,8 +189,9 @@ export default function Analyze() {
             {(Object.keys(MEAL_LABELS) as MealType[]).map((t) => (
               <button
                 key={t}
-                onClick={() => setMealType(t)}
-                className={`chip ${mealType === t ? 'chip-active' : ''}`}
+                onClick={() => updateAnalysisDraft({ mealType: t })}
+                disabled={loading || added}
+                className={`chip ${mealType === t ? 'chip-active' : ''} disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 {MEAL_LABELS[t]}
               </button>
@@ -217,12 +209,13 @@ export default function Analyze() {
         <div className="relative mt-4">
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => updateAnalysisDraft({ input: e.target.value })}
+            readOnly={loading || added}
             rows={4}
             placeholder="例如：中午吃了一碗牛肉面、一个煎蛋，还喝了一杯无糖豆浆……"
             className="input min-h-[116px] resize-none text-[14px] leading-relaxed"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run()
+              if (!added && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run()
             }}
           />
           <span className="pointer-events-none absolute bottom-3 right-4 text-[10px] text-ink-500/60">
@@ -235,19 +228,27 @@ export default function Analyze() {
             {EXAMPLES.slice(0, 3).map((ex) => (
               <button
                 key={ex}
-                onClick={() => setInput(ex)}
-                className="chip max-w-full truncate"
+                onClick={() => updateAnalysisDraft({ input: ex })}
+                disabled={loading || added}
+                className="chip max-w-full truncate disabled:cursor-not-allowed disabled:opacity-60"
                 title={ex}
               >
                 {ex}
               </button>
             ))}
           </div>
-          <button onClick={run} disabled={loading} className="btn-primary ml-auto px-5 py-2.5 text-[13px]">
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-            {loading ? 'AI 分析中…' : '开始分析'}
+          <button onClick={run} disabled={loading || added} className="btn-primary ml-auto px-5 py-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-60">
+            {loading ? <Loader2 size={15} className="animate-spin" /> : added ? <Check size={15} /> : <Sparkles size={15} />}
+            {loading ? 'AI 分析中…' : added ? '本餐已入档' : result || status === 'error' ? '重新分析' : '开始 AI 分析'}
           </button>
         </div>
+
+        {status === 'error' && (
+          <div className="mt-4 flex items-start gap-2 rounded-2xl border border-coral/25 bg-coral/10 px-4 py-3 text-[12px] leading-relaxed text-ink-800" role="alert">
+            <AlertCircle size={15} className="mt-0.5 shrink-0 text-coral" />
+            <p><span className="font-semibold">本次分析未完成：</span>{error}。你的文字记录已保留，可直接重试。</p>
+          </div>
+        )}
 
         {loading && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-paper/92 backdrop-blur-sm">
@@ -298,11 +299,17 @@ export default function Analyze() {
       {/* 结果 */}
       {result && (
         <div className="animate-fadeUp space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[17px] font-semibold text-ink-900">本餐分析结果</h2>
+            <span className="text-[11px] text-ink-500">
+              {added ? '已确认并保存到饮食记录' : '请核对食物与份量，确认后才会入档'}
+            </span>
+          </div>
           <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
             {/* 食物明细 */}
             <div className="rounded-[2rem] border border-clay bg-paper p-5 shadow-soft sm:p-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-[15px] font-semibold text-ink-900">识别到的食物</h2>
+                <h2 className="text-[15px] font-semibold text-ink-900">食物与份量</h2>
                 <span className="tag">
                   <ScanLine size={11} />
                   {result.items.length} 项 · {result.engine === 'llm' ? '大模型' : '本地引擎'}
@@ -336,7 +343,9 @@ export default function Analyze() {
                           type="number"
                           value={item.grams}
                           onChange={(e) => updateGrams(i, Number(e.target.value))}
-                          className="num w-12 bg-transparent text-right text-[12px] font-semibold text-ink-900 outline-none"
+                          disabled={added}
+                          aria-label={`${item.name}克数`}
+                          className="num w-12 bg-transparent text-right text-[12px] font-semibold text-ink-900 outline-none disabled:cursor-not-allowed disabled:opacity-60"
                         />
                         <span className="pr-1 text-[10px] text-ink-500">g</span>
                       </div>
@@ -421,7 +430,7 @@ export default function Analyze() {
                 <span className="grid h-7 w-7 place-items-center rounded-lg bg-ink-900 text-lime-400">
                   <Sparkles size={13} />
                 </span>
-                <h2 className="text-[14px] font-semibold text-ink-900">AI 营养点评</h2>
+                <h2 className="text-[14px] font-semibold text-ink-900">餐食分析总结</h2>
               </div>
               <p className="mt-3 text-[13px] leading-relaxed text-ink-800">{result.summary}</p>
               <div className="mt-4 space-y-2">
@@ -452,26 +461,41 @@ export default function Analyze() {
                 ))}
               </div>
 
-              {/* 流程收尾：加入今日饮食 */}
+              {/* 流程收尾：确认入档并衔接下一步 */}
               <div className="mt-5 rounded-2xl border border-lime-500/30 bg-lime-400/10 p-3">
                 <p className="text-[11px] font-semibold text-ink-800">
-                  {added ? '已加入今日饮食 ✓' : '第 3 步：加入今日饮食'}
+                  {added ? '已保存到饮食记录' : '第 3 步：确认入档'}
                 </p>
-                <p className="mt-0.5 text-[10px] text-ink-600">
+                <p className="mt-0.5 text-[10px] leading-relaxed text-ink-600">
                   {added
-                    ? '这一餐已记录，今日总摄入与概览已更新。'
-                    : '确认营养数据后，把这一餐加入今日记录，方便持续追踪。'}
+                    ? '今日概览已同步更新，可查看完整分析或继续获取膳食建议。'
+                    : '保存后可在历史记录中随时查看本餐分析，避免重复入档。'}
                 </p>
-                <div className="mt-2.5 flex items-center gap-2">
-                  <button onClick={saveMeal} disabled={added} className="btn-primary flex-1 px-4 py-2.5 text-[12.5px] disabled:opacity-60">
-                    {added ? <Check size={14} /> : <Sparkles size={14} />}
-                    {added ? '已加入今日饮食' : `加入今日${MEAL_LABELS[result.mealType]}`}
+                {added ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <Link
+                      to={`/app/log?date=${todayKey()}&meal=${savedMealId}`}
+                      className="btn-primary justify-center px-3 py-2.5 text-[12px]"
+                    >
+                      查看这条记录
+                      <ArrowRight size={13} />
+                    </Link>
+                    <Link to="/app/coach" className="btn-ghost justify-center px-3 py-2.5 text-[12px]">
+                      获取膳食建议
+                    </Link>
+                    <button
+                      onClick={() => resetAnalysis(result.mealType)}
+                      className="btn-ghost justify-center px-3 py-2.5 text-[12px] sm:col-span-2"
+                    >
+                      再记录一餐
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => saveAnalysis()} className="btn-primary mt-3 w-full justify-center px-4 py-2.5 text-[12.5px]">
+                    <Check size={14} />
+                    确认并加入今日{MEAL_LABELS[result.mealType]}
                   </button>
-                  <Link to="/app" className="btn-ghost px-4 py-2.5 text-[12.5px]">
-                    查看概览
-                    <ArrowRight size={14} />
-                  </Link>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -489,7 +513,7 @@ export default function Analyze() {
           {[
             { icon: Brain, title: '语义理解', desc: '理解口语化描述、份量与烹饪方式' },
             { icon: ScanLine, title: '营养拆解', desc: '对齐食物成分表，输出七大营养素' },
-            { icon: Sparkles, title: '个性处方', desc: '结合目标与当日摄入给出改进方案' },
+            { icon: Sparkles, title: '个性建议', desc: '结合目标与当日摄入给出改进方案' },
           ].map((c) => (
             <div key={c.title} className="rounded-2xl border border-clay/80 bg-paper/70 p-5">
               <c.icon size={17} className="text-ink-700" />

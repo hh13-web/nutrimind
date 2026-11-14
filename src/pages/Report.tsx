@@ -71,6 +71,8 @@ export default function Report() {
     const gaps: string[] = []
     const actions: string[] = []
 
+    if (logged.length === 0) return { wins, gaps, actions }
+
     if (logged.length >= Math.ceil(range * 0.6)) {
       wins.push(`近 ${range} 天有 ${logged.length} 天完成记录，数据连续性良好，趋势判断可信。`)
     }
@@ -146,7 +148,7 @@ export default function Report() {
         <div>
           <p className="eyebrow">Nutrition report</p>
           <h1 className="mt-1.5 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.02em] text-ink-900">
-            营养报告
+            趋势报告
           </h1>
           <p className="mt-1.5 text-[13px] text-ink-600">用趋势看清习惯，让调整有据可依。</p>
         </div>
@@ -165,6 +167,24 @@ export default function Report() {
         </div>
       </div>
 
+      {logged.length === 0 ? (
+        <div className="rounded-[2rem] border border-clay bg-paper px-6 py-14 text-center shadow-soft">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-cream text-ink-700">
+            <CalendarDays size={22} />
+          </span>
+          <h2 className="mt-4 text-[17px] font-semibold text-ink-900">暂无饮食记录</h2>
+          <p className="mx-auto mt-2 max-w-md text-[12.5px] leading-relaxed text-ink-500">
+            {meals.length === 0
+              ? '先记录一餐，才能根据真实饮食数据生成趋势和阶段膳食总结。'
+              : `近 ${range} 天没有饮食记录，可切换时间范围，或先记录饮食后再查看总结。`}
+          </p>
+          <Link to="/app/analyze" className="btn-primary mt-5 px-5 py-2.5 text-[13px]">
+            先记录饮食
+            <ArrowUpRight size={14} />
+          </Link>
+        </div>
+      ) : (
+        <>
       {/* 指标 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {metrics.map((m) => (
@@ -252,7 +272,7 @@ export default function Report() {
         </div>
       </div>
 
-      {/* AI 周报 */}
+      {/* 阶段膳食总结 */}
       <div className="overflow-hidden rounded-[2rem] bg-ink-900 p-6 text-white shadow-soft sm:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -260,14 +280,14 @@ export default function Report() {
               <Sparkles size={16} />
             </span>
             <div>
-              <h2 className="text-[15px] font-semibold">AI 营养周报</h2>
+              <h2 className="text-[15px] font-semibold">阶段膳食总结</h2>
               <p className="text-[10.5px] text-white/45">
-                基于近 {range} 天 {logged.length} 条有效记录生成
+                根据近 {range} 天内有记录的 {logged.length} 天饮食数据与本地规则生成
               </p>
             </div>
           </div>
           <Link to="/app/coach" className="btn-lime btn-sm px-4 py-2">
-            追问营养师
+            获取膳食建议
             <ArrowUpRight size={13} />
           </Link>
         </div>
@@ -322,7 +342,7 @@ export default function Report() {
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4">
           <p className="text-[10px] text-white/40">
-            报告由 AI 结合《中国居民膳食指南（2023）》与你的记录生成，仅供健康教育参考。
+            本总结根据饮食记录与本地规则生成，参考《中国居民膳食指南（2023）》，不调用大模型，仅供健康教育参考。
           </p>
           <div className="flex gap-4 text-[10px] text-white/50">
             <span>热量达成 {pct(avgCalories, targets.calories)}%</span>
@@ -331,6 +351,8 @@ export default function Report() {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }

@@ -40,6 +40,16 @@ export interface LoggedItem {
   nutrition: Nutrition
 }
 
+export interface MealAnalysis {
+  sessionId: string
+  input: string
+  score: number
+  grade: string
+  summary: string
+  suggestions: string[]
+  source: 'meal-analysis'
+}
+
 export interface Meal {
   id: string
   date: string
@@ -48,6 +58,7 @@ export interface Meal {
   nutrition: Nutrition
   createdAt: number
   engine: 'llm' | 'local'
+  analysis?: MealAnalysis
 }
 
 export interface Profile {
@@ -97,6 +108,16 @@ export interface AnalysisResult {
   suggestions: string[]
   engine: 'llm' | 'local'
   mealType: MealType
+}
+
+export interface AnalysisSession {
+  id: string
+  input: string
+  mealType: MealType
+  status: 'editing' | 'running' | 'done' | 'error'
+  result: AnalysisResult | null
+  error: string
+  savedMealId: string | null
 }
 
 export interface DaySummary {

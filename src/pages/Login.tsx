@@ -122,7 +122,7 @@ export default function Login() {
             变成可执行的营养方案。
           </h1>
           <p className="mt-4 text-[13.5px] leading-relaxed text-white/55">
-            知膳会读取你的健康档案与饮食记录，用大模型完成餐食识别、营养拆解与个性化建议。
+            知膳会结合你的健康档案与饮食记录，通过 AI 或本地规则完成文字餐食拆解、营养计算与个性化建议。
           </p>
 
           <div className="mt-8 space-y-3">
@@ -167,7 +167,7 @@ export default function Login() {
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-600">
               {mode === 'login'
                 ? '登录后继续查看你的饮食记录与个性化营养建议。'
-                : '注册后会自动生成属于你的示例档案与近 7 天饮食记录。'}
+                : '注册后可按账号保存健康档案、饮食记录与膳食建议对话。'}
             </p>
           </div>
 

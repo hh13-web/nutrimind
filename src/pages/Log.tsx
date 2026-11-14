@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -32,19 +33,56 @@ function shiftDate(key: string, delta: number): string {
   return formatDateKey(dt)
 }
 
+function isDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  return formatDateKey(new Date(y, m - 1, d)) === value
+}
+
 export default function Log() {
   const { meals, targets, addMeal, removeMeal, notify } = useApp()
+  const [searchParams] = useSearchParams()
+  const linkedDate = searchParams.get('date')
+  const linkedMealId = searchParams.get('meal')
   const [date, setDate] = useState(todayKey())
   const [panelType, setPanelType] = useState<MealType>('breakfast')
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Food | null>(null)
   const [grams, setGrams] = useState(100)
   const [unitLabel, setUnitLabel] = useState('克')
+  const [expandedMealId, setExpandedMealId] = useState<string | null>(null)
+  const [highlightedMealId, setHighlightedMealId] = useState<string | null>(null)
+  const mealRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const dayMeals = useMemo(() => meals.filter((m) => m.date === date), [meals, date])
   const nutrition = useMemo(() => sumMeals(dayMeals), [dayMeals])
   const isToday = date === todayKey()
   const results = useMemo(() => searchFoods(query, 10), [query])
+
+  useEffect(() => {
+    if (linkedDate && isDateKey(linkedDate)) setDate(linkedDate)
+    setExpandedMealId(linkedMealId || null)
+    setHighlightedMealId(linkedMealId || null)
+  }, [linkedDate, linkedMealId])
+
+  useEffect(() => {
+    if (!highlightedMealId || expandedMealId !== highlightedMealId) return
+    const frame = window.requestAnimationFrame(() => {
+      mealRefs.current[highlightedMealId]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [date, expandedMealId, highlightedMealId])
+
+  function changeDate(nextDate: string) {
+    setDate(nextDate)
+    setExpandedMealId(null)
+    setHighlightedMealId(null)
+  }
+
+  function toggleMeal(id: string) {
+    setExpandedMealId((current) => (current === id ? null : id))
+    setHighlightedMealId(null)
+  }
 
   function pickFood(food: Food) {
     setSelected(food)
@@ -81,13 +119,17 @@ export default function Log() {
         <div>
           <p className="eyebrow">Food diary</p>
           <h1 className="mt-1.5 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.02em] text-ink-900">
-            饮食记录
+            历史记录
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link to="/app/analyze" className="btn-ghost btn-sm">
+            <Sparkles size={13} />
+            记录饮食
+          </Link>
           <div className="flex items-center gap-1 rounded-full border border-clay bg-paper p-1">
             <button
-              onClick={() => setDate(shiftDate(date, -1))}
+              onClick={() => changeDate(shiftDate(date, -1))}
               className="grid h-7 w-7 place-items-center rounded-full text-ink-600 hover:bg-cream"
               aria-label="前一天"
             >
@@ -97,7 +139,7 @@ export default function Log() {
               {prettyDate(date)}
             </span>
             <button
-              onClick={() => !isToday && setDate(shiftDate(date, 1))}
+              onClick={() => !isToday && changeDate(shiftDate(date, 1))}
               disabled={isToday}
               className="grid h-7 w-7 place-items-center rounded-full text-ink-600 hover:bg-cream disabled:opacity-30"
               aria-label="后一天"
@@ -106,7 +148,7 @@ export default function Log() {
             </button>
           </div>
           {!isToday && (
-            <button onClick={() => setDate(todayKey())} className="btn-ghost btn-sm">
+            <button onClick={() => changeDate(todayKey())} className="btn-ghost btn-sm">
               回到今天
             </button>
           )}
@@ -125,10 +167,6 @@ export default function Log() {
               {dayMeals.length} 条记录
             </span>
           </div>
-          <Link to="/app/analyze" className="btn-ghost btn-sm">
-            <Sparkles size={13} />
-            AI 分析一餐
-          </Link>
         </div>
         <div className="mt-4">
           <Bar value={nutrition.calories} max={targets.calories} color="#0B1F19" height={8} />
@@ -161,7 +199,7 @@ export default function Log() {
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
         {/* 记录列表 */}
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {MEAL_ORDER.map((type) => {
             const group = dayMeals.filter((m) => m.type === type)
             const kcal = group.reduce((a, m) => a + m.nutrition.calories, 0)
@@ -199,32 +237,145 @@ export default function Log() {
                   </p>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    {group.map((meal) => (
-                      <div
-                        key={meal.id}
-                        className="group flex items-start gap-3 rounded-xl bg-cream/50 px-3 py-2.5"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-medium text-ink-900">
-                            {meal.items.map((i) => i.name).join('、')}
-                          </p>
-                          <p className="num mt-0.5 text-[10.5px] text-ink-500">
-                            {Math.round(meal.nutrition.calories)} kcal · 蛋白{' '}
-                            {meal.nutrition.protein}g · 碳水 {meal.nutrition.carbs}g
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            removeMeal(meal.id)
-                            notify('记录已删除', 'info')
+                    {group.map((meal) => {
+                      const isExpanded = expandedMealId === meal.id
+                      const isHighlighted = highlightedMealId === meal.id
+                      return (
+                        <div
+                          key={meal.id}
+                          ref={(node) => {
+                            mealRefs.current[meal.id] = node
                           }}
-                          className="mt-0.5 shrink-0 text-ink-500/30 transition-colors hover:text-coral group-hover:text-ink-500"
-                          aria-label="删除"
+                          className={`group rounded-xl border px-3 py-2.5 transition-colors ${
+                            isHighlighted
+                              ? 'border-lime-400 bg-lime-400/10 ring-2 ring-lime-400/30'
+                              : 'border-transparent bg-cream/50'
+                          }`}
                         >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-start gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleMeal(meal.id)}
+                              className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                              aria-expanded={isExpanded}
+                              aria-controls={`meal-details-${meal.id}`}
+                            >
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[12.5px] font-medium text-ink-900">
+                                  {meal.items.map((i) => i.name).join('、')}
+                                </span>
+                                <span className="num mt-0.5 block text-[10.5px] text-ink-500">
+                                  {Math.round(meal.nutrition.calories)} kcal · 蛋白{' '}
+                                  {meal.nutrition.protein}g · 碳水 {meal.nutrition.carbs}g
+                                </span>
+                              </span>
+                              <ChevronDown
+                                size={14}
+                                className={`mt-0.5 shrink-0 text-ink-500 transition-transform ${
+                                  isExpanded ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (expandedMealId === meal.id) setExpandedMealId(null)
+                                if (highlightedMealId === meal.id) setHighlightedMealId(null)
+                                removeMeal(meal.id)
+                                notify('记录已删除', 'info')
+                              }}
+                              className="-mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-500/50 transition-colors hover:bg-coral/10 hover:text-coral group-hover:text-ink-500"
+                              aria-label="删除记录"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          {isExpanded && (
+                            <div id={`meal-details-${meal.id}`} className="mt-3 border-t border-ink-900/10 pt-3">
+                              <div className="space-y-3">
+                                {meal.items.map((item) => (
+                                  <div key={item.id} className="min-w-0">
+                                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                                      <p className="min-w-0 break-words text-[12px] font-semibold text-ink-900">
+                                        {item.name}
+                                      </p>
+                                      <p className="num shrink-0 text-[11px] text-ink-600">
+                                        {item.unitLabel !== '克' && `${item.unitLabel} · `}
+                                        {item.grams} g
+                                      </p>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                                      {[
+                                        ['热量', `${Math.round(item.nutrition.calories)} kcal`],
+                                        ['蛋白质', `${item.nutrition.protein} g`],
+                                        ['碳水', `${item.nutrition.carbs} g`],
+                                        ['脂肪', `${item.nutrition.fat} g`],
+                                        ['膳食纤维', `${item.nutrition.fiber} g`],
+                                        ['糖', `${item.nutrition.sugar} g`],
+                                        ['钠', `${Math.round(item.nutrition.sodium)} mg`],
+                                      ].map(([label, value]) => (
+                                        <div key={label} className="rounded-lg bg-paper/80 px-2.5 py-1.5">
+                                          <span className="block text-[9.5px] text-ink-500">{label}</span>
+                                          <span className="num mt-0.5 block text-[10.5px] font-medium text-ink-900">
+                                            {value}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {meal.analysis && (
+                                <div className="mt-4 rounded-2xl border border-lime-400/40 bg-lime-400/10 p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="flex items-center gap-1.5 text-[11.5px] font-semibold text-ink-900">
+                                      <Sparkles size={13} />
+                                      来自餐食分析
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-ink-900">
+                                      <span className="num rounded-full bg-paper px-2 py-1">
+                                        {meal.analysis.score} 分
+                                      </span>
+                                      <span className="rounded-full bg-paper px-2 py-1">
+                                        等级 {meal.analysis.grade}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="mt-3">
+                                    <p className="text-[10px] font-medium text-ink-500">原始描述</p>
+                                    <p className="mt-1 whitespace-pre-wrap break-words text-[11.5px] leading-relaxed text-ink-900">
+                                      {meal.analysis.input}
+                                    </p>
+                                  </div>
+                                  <div className="mt-3">
+                                    <p className="text-[10px] font-medium text-ink-500">总结</p>
+                                    <p className="mt-1 break-words text-[11.5px] leading-relaxed text-ink-900">
+                                      {meal.analysis.summary}
+                                    </p>
+                                  </div>
+                                  {meal.analysis.suggestions.length > 0 && (
+                                    <div className="mt-3">
+                                      <p className="text-[10px] font-medium text-ink-500">建议</p>
+                                      <ul className="mt-1.5 space-y-1.5">
+                                        {meal.analysis.suggestions.map((suggestion, index) => (
+                                          <li key={`${index}-${suggestion}`} className="flex items-start gap-2 text-[11.5px] leading-relaxed text-ink-900">
+                                            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-ink-900" />
+                                            <span className="min-w-0 break-words">{suggestion}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -233,10 +384,10 @@ export default function Log() {
         </div>
 
         {/* 添加食物面板 */}
-        <div id="add-food-panel" className="lg:sticky lg:top-6 lg:self-start">
+        <div id="add-food-panel" className="min-w-0 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-[1.75rem] border border-clay bg-paper p-4 shadow-soft sm:p-5">
-            <h2 className="text-[14px] font-semibold text-ink-900">添加食物</h2>
-            <p className="mt-1 text-[10.5px] text-ink-500">从营养库中选择，或前往 AI 分析页描述一餐</p>
+            <h2 className="text-[14px] font-semibold text-ink-900">食物库补录</h2>
+            <p className="mt-1 text-[10.5px] text-ink-500">从营养库搜索并补充当前日期的饮食记录</p>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
               {MEAL_ORDER.map((t) => (
@@ -290,7 +441,7 @@ export default function Log() {
                 </button>
               ))}
               {results.length === 0 && (
-                <p className="py-6 text-center text-[11.5px] text-ink-500">没有找到，试试 AI 分析描述一餐</p>
+                <p className="py-6 text-center text-[11.5px] text-ink-500">没有找到，请尝试其他食物名称</p>
               )}
             </div>
 
