@@ -7,11 +7,11 @@
 - 双端适配：桌面端 Web（固定侧栏）与移动端 Web（底部标签栏），同一套代码。
 - 账号体系：邮箱 + 密码注册登录，每个账号拥有独立的健康档案、饮食记录与对话数据；支持游客模式零门槛体验。
 - 双引擎分析：服务端配置大模型后调用 LLM（流式对话）；未配置时，核心文字分析使用内置的本地营养规则引擎。登录注册与在线大模型功能仍需要网络和服务端支持。
-- 前后端一体：Node.js 服务端负责账号认证、AI 代理与静态托管，API Key 只在服务端环境变量中读取。
+- 前后端一体：前端为 Vite 静态资源，接口以 Serverless Functions 形式部署（Cloudflare Pages Functions / IGA Pages），也可在本地用 Node 服务运行。API Key 只在服务端环境变量中读取。
 
 ## 在线体验
 
-- 公网地址：`https://nutrimind-7remyk8a3n-b14o0vwuni.preview.iga-pages.com`
+- 公网地址：`https://nutrimind-7mz.pages.dev`（Cloudflare Pages，公开访问、无需登录、长期有效）
 - 演示账号：`demo@nutrimind.app` / `demo1234`
 - 线上已接入魔搭 ModelScope 推理服务（`Qwen/Qwen3.8-Flash-Next`），餐食分析与膳食建议均由该模型生成；未配置模型时自动降级为本地规则引擎。
 - 点击首页「免费开始」即以游客身份进入工作台；浏览概览、记录与报告无需注册。
@@ -110,6 +110,17 @@ npm run dev:server
 npm run dev
 # 浏览器打开 http://localhost:5173/
 ```
+
+### 部署到 Cloudflare Pages
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name nutrimind
+```
+
+根目录的 `wrangler.toml` 已声明 `functions/` 目录与 KV 绑定 `USERS`（账号数据持久化）。首次部署前需在 Cloudflare 控制台为项目配置 `AUTH_SECRET`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL` 四个环境变量或 Secrets。
+
+使用 IGA Pages 时接口入口为 `api/[[default]].js`，两者共用同一份 `api/core.js` 逻辑。
 
 ## 环境变量说明
 
